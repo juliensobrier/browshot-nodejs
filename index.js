@@ -1,7 +1,7 @@
 'use strict';
 
 const request = require('request');
-var fs = require("fs");
+const fs = require("fs");
 
 var browshot;
 
@@ -112,8 +112,8 @@ function return_reply(action, args, callback) {
 	});
 }
 
-function return_post_reply(action, args, file, callback) {
-	return return_post_string(action, args, file, function(data) {
+function return_post_reply(action, args, callback) {
+	return return_post_string(action, args, function(data) {
 		if (data == '') {
 			return callback({ error: 1, message: 'Invalid server response' });
 		}
@@ -581,9 +581,9 @@ Browshot.prototype.batchCreate = function(file = '', instance_id = 0, args = { }
 	}
 	
 	args.instance_id = instance_id;
+	args.file = file;
 	
-	
-	return return_post_reply('batch/create', args, file, callback);
+	return return_post_reply('batch/create', args, callback);
 }
 
 /**
@@ -599,6 +599,8 @@ Browshot.prototype.batchInfo = function(id = 0, args = { }, callback) {
 			error("Missing batch ID");
 			return callback({status: 'error', error: 'Missing batch ID'});
 	}
+	
+	args.id = id;
 	
 	return return_reply('batch/info', args, callback);
 }

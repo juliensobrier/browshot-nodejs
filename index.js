@@ -533,19 +533,16 @@ Browshot.prototype.screenshotDelete = function(id = 0, args = { }, callback) {
  * Get the HTML code of the rendered page.
  * @link http://browshot.com/api/documentation#screenshot_html
  * @param  {Number}   id          Screenshot ID. Required. 
- * @param  {Object}   args        arguments. Optional.
  * @param  {Function} callback    Callback function
- * @return {Object}   The batch properties
+ * @return {Object}   The HTML code
  */
-Browshot.prototype.screenshotHtml = function(id = 0, args = { }, callback) {
+Browshot.prototype.screenshotHtml = function(id = 0, callback) {
 	if (id == 0) {
 			error("Missing screenshot ID");
-			return callback({status: 'error', error: 'Missing screenshot ID'});
+			return callback('');
 	}
-	
-	args.id = id;
 
-	return return_reply('screenshot/html', args, callback);
+	return return_string('screenshot/html', { id : id }, callback);
 }
 
 /**

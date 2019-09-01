@@ -24,8 +24,8 @@ function make_url(action, args = {}) {
 
 	
 	if (args.hasOwnProperty('urls')) {
-		args.urls.forEach(function(url) {
-				url += '&url=' + encodeURIComponent(url);
+		args.urls.forEach(function(uri) {
+				url += '&url=' + encodeURIComponent(uri);
 		});
 		
 		delete args.urls;
@@ -205,8 +205,6 @@ Browshot.prototype.simple = function(args, callback) {
 Browshot.prototype.simpleFile = function(file, args, callback) {
 	var url = make_url('simple', args);
 	
-	var data = {code: 500, data: ''};
-	
 	request(url, (err, response, body) => {
 		if (err || response.statusCode != 200) { 
 			error(err, ' ', url); 
@@ -230,8 +228,6 @@ Browshot.prototype.simpleFile = function(file, args, callback) {
 			return callback({ code: response.statusCode, file: '' });
 		}
 	});
-	
-	return data;
 }
 
 

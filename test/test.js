@@ -183,4 +183,15 @@ else {
 			});
 		});
 	});
+	
+	describe('Account API tests', function () {
+		it('should retrieve the account details', function (done) {
+			client.accountInfo({ }, function(info) {
+				assert.ok('balance' in info, "balance is missing");
+				assert.ok('free_screenshots_left' in info, "balance is missing");
+				
+				done();
+			});
+		});
+	});
 }

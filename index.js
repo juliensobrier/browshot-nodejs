@@ -248,7 +248,7 @@ Browshot.prototype.instanceList = function(callback) {
 	request(url, (err, response, body) => {
 		if (err) {
 			error(err);
-			return callback({});
+			return callback({status: 'error', error: err});
 		}
 		
 		return callback(JSON.parse(body));
@@ -266,7 +266,7 @@ Browshot.prototype.instanceList = function(callback) {
 Browshot.prototype.instanceInfo = function(id = 0, callback) {
 	if (id == 0) {
 			error("Missing instance ID");
-			return callback({});
+			return callback({status: 'error', error: 'Missing instance ID'});
 	}
 	
 	
@@ -275,7 +275,7 @@ Browshot.prototype.instanceInfo = function(id = 0, callback) {
 	request(url, (err, response, body) => {
 		if (err) {
 			error(err);
-			return callback({});
+			return callback({status: 'error', error: err});
 		}
 		
 		return callback(JSON.parse(body));
@@ -296,7 +296,7 @@ Browshot.prototype.browserList = function(callback) {
 	request(url, (err, response, body) => {
 		if (err) {
 			error(err);
-			return callback({});
+			return callback({status: 'error', error: err});
 		}
 		
 		return callback(JSON.parse(body));
@@ -314,7 +314,7 @@ Browshot.prototype.browserList = function(callback) {
 Browshot.prototype.browserInfo = function(id = 0, callback) {
 	if (id == 0) {
 			error("Missing browser ID");
-			return callback({});
+			return callback({status: 'error', error: 'Missing browser ID'});
 	}
 	
 	
@@ -342,7 +342,11 @@ Browshot.prototype.browserInfo = function(id = 0, callback) {
 Browshot.prototype.screenshotCreate = function(args = { }, callback) {
 	if (! args.hasOwnProperty('url')) {
 			error("Missing URL");
-			return callback({});
+			return callback({ status: 'error', error: "Missing URL" });
+	}
+	if (! args.hasOwnProperty('instance_id')) {
+			error("Missing instance ID");
+			return callback({ status: 'error', error: "Missing instance ID" });
 	}
 	
 	return return_reply('screenshot/create', args, callback);
@@ -358,8 +362,8 @@ Browshot.prototype.screenshotCreate = function(args = { }, callback) {
  */
 Browshot.prototype.screenshotInfo = function(id = 0, args = { }, callback) {
 	if (id == 0) {
-			error("Missing browser ID");
-			return callback({});
+			error("Missing screenshot ID");
+			return callback({ status: 'error', error: "Missing screenshot ID" });
 	}
 	
 	args.id = id;
@@ -389,7 +393,7 @@ Browshot.prototype.screenshotList = function(args = { }, callback) {
 Browshot.prototype.screenshotSearch = function(url = '', args = { }, callback) {
 	if (url == '') {
 			error("Missing URL");
-			return callback({});
+			return callback({ status: 'error', error: "Missing screenshot URL" });
 	}
 	
 	args.url = url;
@@ -408,7 +412,7 @@ Browshot.prototype.screenshotSearch = function(url = '', args = { }, callback) {
 Browshot.prototype.screenshotHost = function(id = 0, args = { }, callback) {
 	if (id == 0) {
 			error("Missing screenshot ID");
-			return callback({});
+			return callback({ status: 'error', error: "Missing screenshot ID" });
 	}
 	
 	args.id = id;
@@ -427,7 +431,7 @@ Browshot.prototype.screenshotHost = function(id = 0, args = { }, callback) {
 Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback) {
 	if (id == 0) {
 			error("Missing screenshot ID");
-			return callback({});
+			return callback({ status: 'error', error: "Missing screenshot ID" });
 	}
 	
 	args.id = id;
@@ -457,12 +461,12 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback) 
 Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = { }, callback) {
 	if (id == 0) {
 			error("Missing screenshot ID");
-			return callback({});
+			return callback('');
 	}
 	
 	if (file == '') {
 			error("Missing file");
-			return callback({});
+			return callback('');
 	}
 	
 	args.id = id;
@@ -498,7 +502,7 @@ Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = 
 Browshot.prototype.screenshotShare = function(id = 0, args = { }, callback) {
 	if (id == 0) {
 			error("Missing screenshot ID");
-			return callback({});
+			return callback({status: 'error', error: 'Missing screenshot ID'});
 	}
 	
 	args.id = id;
@@ -517,7 +521,7 @@ Browshot.prototype.screenshotShare = function(id = 0, args = { }, callback) {
 Browshot.prototype.screenshotDelete = function(id = 0, args = { }, callback) {
 	if (id == 0) {
 			error("Missing screenshot ID");
-			return callback({});
+			return callback({status: 'error', error: 'Missing screenshot ID'});
 	}
 	
 	args.id = id;
@@ -536,7 +540,7 @@ Browshot.prototype.screenshotDelete = function(id = 0, args = { }, callback) {
 Browshot.prototype.screenshotHtml = function(id = 0, args = { }, callback) {
 	if (id == 0) {
 			error("Missing screenshot ID");
-			return callback({});
+			return callback({status: 'error', error: 'Missing screenshot ID'});
 	}
 	
 	args.id = id;
@@ -568,12 +572,12 @@ Browshot.prototype.screenshotMultiple = function(args = { }, callback) {
 Browshot.prototype.batchCreate = function(file = '', instance_id = 0, args = { }, callback) {
 	if (file == '') {
 			error("Missing file");
-			return callback({});
+			return callback({status: 'error', error: 'Missing file'});
 	}
 	
 	if (instance_id == 0) {
 			error("Missing instance ID");
-			return callback({});
+			return callback({status: 'error', error: 'Missing instance ID'});
 	}
 	
 	args.instance_id = instance_id;
@@ -593,7 +597,7 @@ Browshot.prototype.batchCreate = function(file = '', instance_id = 0, args = { }
 Browshot.prototype.batchInfo = function(id = 0, args = { }, callback) {
 	if (id == 0) {
 			error("Missing batch ID");
-			return callback({});
+			return callback({status: 'error', error: 'Missing batch ID'});
 	}
 	
 	return return_reply('batch/info', args, callback);

@@ -3,6 +3,9 @@
 const request = require('request');
 const fs = require("fs");
 
+var baseRequest = request.defaults({ maxRedirects: 32 });
+process.setMaxListeners(32); 
+
 var browshot;
 
 function info(/**/) {
@@ -185,7 +188,7 @@ Browshot.prototype.simple = function(args, callback) {
 	
 	var data = {code: 500, data: ''};
 	
-	request(url, (err, response, body) => {
+	baseRequest(url, (err, response, body) => {
 		if (err) { error(err); }
 		
 		return callback({ code: response.statusCode, data: body });
@@ -205,7 +208,7 @@ Browshot.prototype.simple = function(args, callback) {
 Browshot.prototype.simpleFile = function(file, args, callback) {
 	var url = make_url('simple', args);
 	
-	request(url, (err, response, body) => {
+	baseRequest(url, (err, response, body) => {
 		if (err || response.statusCode != 200) { 
 			error(err, ' ', url); 
 			

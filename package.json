@@ -1,6 +1,6 @@
 {
   "name": "browshot",
-  "version": "1.22.1",
+  "version": "1.22.2",
   "description": "Library for browshot.com, the screenshot service",
   "main": "index.js",
   "scripts": {

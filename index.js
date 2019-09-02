@@ -208,7 +208,7 @@ Browshot.prototype.simple = function(args, callback) {
 Browshot.prototype.simpleFile = function(file, args, callback) {
 	var url = make_url('simple', args);
 	
-	baseRequest(url, (err, response, body) => {
+	baseRequest({ url: url, encoding: null }, (err, response, body) => {
 		if (err || response.statusCode != 200) { 
 			error(err, ' ', url); 
 			
@@ -216,7 +216,7 @@ Browshot.prototype.simpleFile = function(file, args, callback) {
 		}
 		
 		if (body != '') {
-			fs.writeFile(file, body, (err) => {
+			fs.writeFile(file, body, 'binary', (err) => {
 				if (err) {
 					error(err);
 					
@@ -437,7 +437,7 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback) 
 	
 	var url = make_url('screenshot/thumbnail', args);
 	
-	request(url, (err, response, body) => {
+	request({ url: url, encoding: null }, (err, response, body) => {
 		if (err) {
 			error(err);
 			error(body);
@@ -472,7 +472,7 @@ Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = 
 	
 	this.screenshotThumbnail(id, args, function(data) {
 		if (data != '') {
-			fs.writeFile(file, data, (err) => {
+			fs.writeFile(file, data, 'binary', (err) => {
 				if (err) {
 					error(err);
 					

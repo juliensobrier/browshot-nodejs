@@ -430,7 +430,7 @@ Browshot.prototype.screenshotHost = function(id = 0, args = { }, callback) {
 Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback) {
 	if (id == 0) {
 			error("Missing screenshot ID");
-			return callback({ status: 'error', error: "Missing screenshot ID" });
+			return callback('');
 	}
 	
 	args.id = id;
@@ -442,6 +442,11 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback) 
 			error(err);
 			error(body);
 			return callback('');
+		}
+
+		if (response && response.statusCode != 200) {
+			error('Image cannot be retrieved');
+			return callback('');;
 		}
 		
 		return callback(body);

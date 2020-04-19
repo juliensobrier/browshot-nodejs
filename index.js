@@ -121,9 +121,11 @@ function return_reply(action, args, callback) {
 		catch(e) {
 			error("Invalid JSON: " + e);
 			error (data);
+
+			return callback({error: 1, message: "Invalid server response"});
 		}
 		
-		return callback({error: 1, message: "Invalid server response"});
+		return callback(info);
 		
 	});
 }

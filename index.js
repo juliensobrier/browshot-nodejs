@@ -454,6 +454,42 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback) 
 }
 
 /**
+ * Retrieve the screenshot, or a thumbnail, of a specific shot.
+ * @link http://browshot.com/api/documentation#screenshot_thumbnail
+ * @param  {Number}   id          Screenshot ID. Required. 
+ * @param  {Number}   shot        Shot number. Required. 
+ * @param  {Object}   args        arguments. Optional.
+ * @param  {Function} callback    Callback function
+ * @return {Object}   Return the image content and the shot number.
+ */
+Browshot.prototype.shotThumbnail = function(id = 0, shot = 1, args = { }, callback) {
+	if (id == 0) {
+			error("Missing screenshot ID");
+			return callback(['', shot]);
+	}
+	
+	args.id = id;
+	args.shot = shot;
+	
+	var url = make_url('screenshot/thumbnail', args);
+	
+	request({ url: url, encoding: null }, (err, response, body) => {
+		if (err) {
+			error(err);
+			error(body);
+			return callback(['', shot]);
+		}
+
+		if (response && response.statusCode != 200) {
+			error('Image cannot be retrieved');
+			return callback(['', shot]);
+		}
+		
+		return callback([body, shot]);
+	});
+}
+
+/**
  * Retrieve the screenshot, or a thumbnail, and save it to a file.
  * @link http://browshot.com/api/documentation#thumbnails
  * @param  {Number}   id          Screenshot ID. Required. 

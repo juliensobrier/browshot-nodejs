@@ -4,7 +4,7 @@ const request = require('request');
 const fs = require("fs");
 
 var baseRequest = request.defaults({ maxRedirects: 32 });
-process.setMaxListeners(32); 
+process.setMaxListeners(64); 
 
 var browshot;
 
@@ -66,6 +66,10 @@ function return_string(action, args, callback, retry = 0) {
 			error(err, " - Retry: " + retry); 
 			return return_string(action, args, callback, retry);
 		}
+		else if (response && response.statusCode >= 400 && retry <= browshot.retry) {
+			error(err, " - Retry: " + retry); 
+			return return_string(action, args, callback, retry);
+		}
 		else {
 			return callback(body);
 		}
@@ -119,7 +123,7 @@ function return_reply(action, args, callback) {
 			error (data);
 		}
 		
-		return callback({error: 1, message: "Invalid JSON"});
+		return callback({error: 1, message: "Invalid server response"});
 		
 	});
 }

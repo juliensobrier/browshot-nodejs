@@ -109,8 +109,17 @@ function return_reply(action, args, callback) {
 		if (data == '') {
 			return callback({ error: 1, message: 'Invalid server response' });
 		}
+
+		var info = {};
+		try {
+			info = JSON.parse(data);
+		}
+		catch(e) {
+			error("Invalid JSON: " + e);
+			error (data);
+		}
 		
-		return callback(JSON.parse(data));
+		return callback({error: 1, message: "Invalid JSON"});
 		
 	});
 }

@@ -1,4 +1,6 @@
 Browshot version 1.22.1
+
+[![Git](https://app.soluble.cloud/api/v1/public/badges/ee63eeef-e88e-4504-ae7f-808bb4eb7a7c.svg?orgId=234270307752)](https://app.soluble.cloud/repos/details/github.com/juliensobrier/browshot-nodejs?orgId=234270307752)  
 ================================
 
 Browshot ( https://browshot.com/ ) is a web service to easily make screenshots of web pages in any screen size, as any device: iPhone, iPad, Android, PC, etc. Browshot has full Flash, JavaScript, CSS, & HTML5 support.

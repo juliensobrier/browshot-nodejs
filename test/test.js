@@ -14,14 +14,15 @@ if(! process.env.BROWSHOT_API_KEY) {
 	
 }
 else {
-	var client = new browshot(process.env.BROWSHOT_API_KEY);
+	const debug = process.env.BROWSHOT_DEBUG || false;
+	var client = new browshot(process.env.BROWSHOT_API_KEY, debug);
 
 	describe('Simple API tests', function () {
 		it('should return an image file', function (done) {
 			this.timeout(1000 * 60 * 3);
 			
 			client.simple(
-				{ url: 'http://mobilito.net/', instance_id: 12, cache: 60 * 60 * 24 * 365 },
+				{ url: 'https://browshot.com/', instance_id: 12, cache: 60 * 60 * 24 * 365 },
 				function(data) { 
 					assert.equal(data.code, 200);
 					assert.ok(data.data.length > 100);
@@ -33,7 +34,7 @@ else {
 	
 	
 	describe('Instance API tests', function () {
-		it('should return a comple list of instances', function (done) {
+		it('should return a complete list of instances', function (done) {
 			this.timeout(1000 * 60 * 1);
 			
 			client.instanceList(function(list) {
@@ -43,7 +44,7 @@ else {
 				assert.ok('shared' in list, "list of shared instances is missing");
 				
 				assert.ok(list.free.length > 0, "list of free instances is incomplete");
-				assert.ok(list.shared.length > 0, "list of sharedinstances is incomplete");
+				assert.ok(list.shared.length > 0, "list of shared instances is incomplete");
 				
 				var free = list.free[0];
 				assert.ok('id' in free, "instance ID is missing");
@@ -83,7 +84,7 @@ else {
 	});
 	
 	describe('Browser API tests', function () {
-		it('should return a comple list of browsers', function (done) {
+		it('should return a complete list of browsers', function (done) {
 			this.timeout(1000 * 60 * 1);
 			
 			client.browserList(function(list) {
@@ -101,7 +102,7 @@ else {
 	});
 	
 	describe('Screenshot API tests', function () {
-		it('should fail', function (done) {
+		it('should fail empty URL', function (done) {
 			client.screenshotCreate({ }, function(info) {
 				assert.ok('status' in info, "Error is missing");
 				assert.ok('error' in info, "Error message is missing");
@@ -111,7 +112,9 @@ else {
 			});
 		});
 			
-		it('should fail', function (done) {
+		it('should fail invalid URL', function (done) {
+			this.timeout(1000 * 60 * 2);
+
 			client.screenshotCreate({ url: '-', instance_id: 12 }, function(info) {
 				assert.ok('status' in info, "Error is missing");
 				assert.ok('error' in info, "Error message is missing");
@@ -122,7 +125,7 @@ else {
 		it('should succeed', function (done) {
 			this.timeout(1000 * 60 * 2);
 			
-			client.screenshotCreate({ url: 'https://browshot.com/', cache: 60 * 60 / 24 * 365, instance_id: 12 }, 
+			client.screenshotCreate({ url: 'https://browshot.com/', cache: 60 * 60 / 24 * 365, instance_id: 12, details: 1 }, 
 				function(info) {
 					assert.ok('id' in info, "Screenshot ID is missing");
 					assert.ok('status' in info, "Screenshot status is missing");
@@ -149,7 +152,7 @@ else {
 				
 				var screenshot_id = Object.keys(list)[0];
 			
-				client.screenshotInfo(screenshot_id, { }, function(info) {
+				client.screenshotInfo(screenshot_id, { details: 1 }, function(info) {
 					assert.ok('id' in info, "Screenshot ID is missing");
 					assert.ok('status' in info, "Screenshot status is missing");
 					
@@ -168,14 +171,66 @@ else {
 			});
 		});
 		
-		it('should retrieve a thumbnail', function (done) {
+		it('should retrieve a PNG thumbnail', function (done) {
 			this.timeout(1000 * 60 * 2);
 			client.screenshotList({ }, function(list) {
 				
 				var screenshot_id = Object.keys(list)[0];
 				
 				client.screenshotThumbnail(screenshot_id, { }, function(image) {
-					assert.ok(image.length > 100, "Image content is missing");
+					console.log(`Screenshot ID (PNG): ${screenshot_id}`);
+					console.log(image.length);
+					assert.ok(image.length > 100, "Image PNG content is missing");
+					
+					done();
+				});
+				
+			});
+		});
+
+		it('should retrieve a JPEG thumbnail', function (done) {
+			this.timeout(1000 * 60 * 2);
+			client.screenshotList({ }, function(list) {
+				
+				var screenshot_id = Object.keys(list)[0];
+
+				client.screenshotThumbnail(screenshot_id, { format: 'jpeg' }, function(image) {
+					console.log(`Screenshot ID (JPEG): ${screenshot_id}`);
+					assert.ok(image.length > 100, "Image  JPEG content is missing");
+					
+					done();
+				});
+				
+			});
+		});
+
+		it('should retrieve a PNG shot', function (done) {
+			this.timeout(1000 * 60 * 2);
+			client.screenshotList({ }, function(list) {
+				
+				var screenshot_id = Object.keys(list)[0];
+				
+				client.shotThumbnail(screenshot_id, 1, { }, function([image, shot]) {
+					console.log(`Screenshot ID (PNG): ${screenshot_id}`);
+					assert.ok(image.length > 100, "Image PNG content is missing");
+					assert.ok(shot, 1);
+					
+					done();
+				});
+				
+			});
+		});
+
+		it('should retrieve a JPEG shot', function (done) {
+			this.timeout(1000 * 60 * 2);
+			client.screenshotList({ }, function(list) {
+				
+				var screenshot_id = Object.keys(list)[0];
+
+				client.shotThumbnail(screenshot_id, 1, { format: 'jpeg' }, function([image, shot]) {
+					console.log(`Screenshot ID (JPEG): ${screenshot_id}`);
+					assert.ok(image.length > 100, "Image  JPEG content is missing");
+					assert.ok(shot, 1);
 					
 					done();
 				});

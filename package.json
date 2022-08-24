@@ -1,6 +1,6 @@
 {
   "name": "browshot",
-  "version": "1.22.6",
+  "version": "1.22.8",
   "description": "Library for browshot.com, the screenshot service",
   "main": "index.js",
   "scripts": {
@@ -13,11 +13,13 @@
     "mocha": "^6.2.0"
   },
   "dependencies": {
+    "assert": "^2.0.0",
+    "image-type": "^4.1.0",
     "request": "^2.88.0"
   },
   "repository": {
-		"type": "git",
-		"url": "https://github.com/juliensobrier/browshot-nodejs"
-	},
-	"homepage": "https://browshot.com/api/documentation"
+    "type": "git",
+    "url": "https://github.com/juliensobrier/browshot-nodejs"
+  },
+  "homepage": "https://browshot.com/api/documentation"
 }

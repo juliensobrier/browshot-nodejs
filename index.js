@@ -2,8 +2,9 @@
 
 const request = require('request');
 const fs = require("fs");
+const imageType = require('image-type');
 
-var baseRequest = request.defaults({ maxRedirects: 32 });
+var baseRequest = request.defaults({ maxRedirects: 32, strictSSL: false });
 process.setMaxListeners(64); 
 
 var browshot;
@@ -60,7 +61,7 @@ function return_string(action, args, callback, retry = 0) {
 	
 	var url = make_url(action, args);
 	
-	request(url, (err, response, body) => {
+	baseRequest(url, (err, response, body) => {
 		retry++;
 		if (err) { 
 			error(err, " - Retry: " + retry); 
@@ -442,7 +443,7 @@ Browshot.prototype.screenshotHost = function(id = 0, args = { }, callback) {
  * @param  {Function} callback    Callback function
  * @return {Object}   Return the image content.
  */
-Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback) {
+Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback, retry = 0) {
 	if (id == 0) {
 			error("Missing screenshot ID");
 			return callback('');
@@ -451,19 +452,42 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback) 
 	args.id = id;
 	
 	var url = make_url('screenshot/thumbnail', args);
-	
-	request({ url: url, encoding: null }, (err, response, body) => {
+
+	retry++;
+
+	info(`screenshotThumbnail retry ${retry}`);
+	baseRequest({ url: url, encoding: null }, (err, response, body) => {
 		if (err) {
 			error(err);
 			error(body);
-			return callback('');
+			if (retry >= browshot.retry) {
+				return callback('');
+			}
+
+			return this.screenshotThumbnail(id, args, callback, retry);
 		}
 
 		if (response && response.statusCode != 200) {
-			error('Image cannot be retrieved');
-			return callback('');;
+			error(`Image cannot be retrieved - ${retry}`);
+			if (i >= browshot.retry) {
+				return callback('');
+			}
+			
+			return this.screenshotThumbnail(id, args, callback, retry);
+		}
+
+		info(`imageType check`);
+		var imageInfo = imageType(body);
+		if (imageInfo == null || !imageInfo.hasOwnProperty('ext') || !['jpg', 'png'].includes(imageInfo.ext)) {
+			error(`Image cannot be retrieved: incorrect format - ${retry} - ${imageInfo.ext}`);
+			if (retry >= browshot.retry) {
+				return callback('');
+			}
+				
+			return this.screenshotThumbnail(id, args, callback, retry);
 		}
 		
+		info(`screenshotThumbnail successful`);
 		return callback(body);
 	});
 }
@@ -477,7 +501,7 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback) 
  * @param  {Function} callback    Callback function
  * @return {Object}   Return the image content and the shot number.
  */
-Browshot.prototype.shotThumbnail = function(id = 0, shot = 1, args = { }, callback) {
+Browshot.prototype.shotThumbnail = function(id = 0, shot = 1, args = { }, callback, retry = 0) {
 	if (id == 0) {
 			error("Missing screenshot ID");
 			return callback(['', shot]);
@@ -487,19 +511,42 @@ Browshot.prototype.shotThumbnail = function(id = 0, shot = 1, args = { }, callba
 	args.shot = shot;
 	
 	var url = make_url('screenshot/thumbnail', args);
-	
-	request({ url: url, encoding: null }, (err, response, body) => {
+
+	retry++;
+
+	info(`shotThumbnail retry ${retry}`);
+	baseRequest({ url: url, encoding: null }, (err, response, body) => {
 		if (err) {
 			error(err);
 			error(body);
-			return callback(['', shot]);
+			if (retry >= browshot.retry) {
+				return callback(['', shot]);
+			}
+
+			return this.shotThumbnail(id, shot, args, callback, retry);
 		}
 
 		if (response && response.statusCode != 200) {
-			error('Image cannot be retrieved');
-			return callback(['', shot]);
+			error(`Image cannot be retrieved - ${retry}`);
+			if (i >= browshot.retry) {
+				return callback(['', shot]);
+			}
+			
+			return this.shotThumbnail(id, shot, args, callback, retry);
+		}
+
+		info(`imageType check`);
+		var imageInfo = imageType(body);
+		if (imageInfo == null || !imageInfo.hasOwnProperty('ext') || !['jpg', 'png'].includes(imageInfo.ext)) {
+			error(`Image cannot be retrieved: incorrect format - ${retry} - ${imageInfo.ext}`);
+			if (retry >= browshot.retry) {
+				return callback(['', shot]);
+			}
+				
+			return this.shotThumbnail(id, shot, args, callback, retry);
 		}
 		
+		info(`shotThumbnail successful`);
 		return callback([body, shot]);
 	});
 }
@@ -539,7 +586,7 @@ Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = 
 			});
 		}
 		else {
-			error("No screeenshot retrieved");
+			error("No screenshot retrieved");
 			return callback('');
 		}
 		

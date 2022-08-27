@@ -528,7 +528,7 @@ Browshot.prototype.shotThumbnail = function(id = 0, shot = 1, args = { }, callba
 
 		if (response && response.statusCode != 200) {
 			error(`Image cannot be retrieved - ${retry}`);
-			if (i >= browshot.retry) {
+			if (retry >= browshot.retry) {
 				return callback(['', shot]);
 			}
 			

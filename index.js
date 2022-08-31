@@ -469,7 +469,7 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback, 
 
 		if (response && response.statusCode != 200) {
 			error(`Image cannot be retrieved - ${retry}`);
-			if (i >= browshot.retry) {
+			if (retry >= browshot.retry) {
 				return callback('');
 			}
 			

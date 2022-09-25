@@ -1,6 +1,6 @@
 {
   "name": "browshot",
-  "version": "1.22.10",
+  "version": "1.26.0",
   "description": "Library for browshot.com, the screenshot service",
   "main": "index.js",
   "scripts": {
@@ -9,11 +9,11 @@
   "author": "Julien Sobrier",
   "license": "ISC",
   "devDependencies": {
+    "assert": "^2.0.0",
     "chai": "^4.2.0",
     "mocha": "^6.2.0"
   },
   "dependencies": {
-    "assert": "^2.0.0",
     "image-type": "^4.1.0",
     "request": "^2.88.0"
   },

@@ -7,24 +7,23 @@ const imageType = require('image-type');
 var baseRequest = request.defaults({ maxRedirects: 32, strictSSL: false });
 process.setMaxListeners(64); 
 
-var browshot;
 
-function info(/**/) {
+Browshot.prototype.info = function (/**/) {
 	var args = Array.prototype.slice.call(arguments);
 
-	if (browshot.debug) {
+	if (this.debug) {
 		console.log(args.join(''));
 	};
 }
 
-function error(/**/) {
+Browshot.prototype.error = function (/**/) {
 	var args = Array.prototype.slice.call(arguments);
 	
 	console.log('ERROR ' + args.join(''));
 }
 
-function make_url(action, args = {}) {
-	var url = browshot.base + "/" + (action || '') + '?key=' + encodeURIComponent(browshot.key);
+Browshot.prototype.make_url = function(action, args = {}) {
+	var url = this.base + "/" + (action || '') + '?key=' + encodeURIComponent(this.key);
 
 	
 	if (args.hasOwnProperty('urls')) {
@@ -47,29 +46,29 @@ function make_url(action, args = {}) {
 		url += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(args[key]);
 	}
 	
-	info(url);
+	this.info(url);
 
 	return url;
 }
 
-function return_string(action, args, callback, retry = 0) {
-	if (retry > browshot.retry) {
-			error("Too many retries: ", retry, " - ", args.url || '');
+Browshot.prototype.return_string = function (action, args, callback, retry = 0) {
+	if (retry > this.retry) {
+			this.error("Too many retries: ", retry, " - ", args.url || '');
 			
 			return callback('');
 	}
 	
-	var url = make_url(action, args);
+	var url = this.make_url(action, args);
 	
 	baseRequest(url, (err, response, body) => {
 		retry++;
 		if (err) { 
-			error(err, " - Retry: " + retry); 
-			return return_string(action, args, callback, retry);
+			this.error(err, " - Retry: " + retry); 
+			return this.return_string(action, args, callback, retry);
 		}
-		else if (response && response.statusCode >= 400 && retry <= browshot.retry) {
-			error(err, " - Retry: " + retry); 
-			return return_string(action, args, callback, retry);
+		else if (response && response.statusCode >= 400 && retry <= this.retry) {
+			this.error(err, " - Retry: " + retry); 
+			return this.return_string(action, args, callback, retry);
 		}
 		else {
 			return callback(body);
@@ -77,9 +76,9 @@ function return_string(action, args, callback, retry = 0) {
 	});
 }
 
-function return_post_string(action, args, callback, retry = 0) {
-	if (retry > browshot.retry) {
-			error("Too many retries: ", retry, " - ", args.url || '');
+Browshot.prototype.return_post_string = function (action, args, callback, retry = 0) {
+	if (retry > this.retry) {
+			this.error("Too many retries: ", retry, " - ", args.url || '');
 			
 			return callback('');
 	}
@@ -90,7 +89,7 @@ function return_post_string(action, args, callback, retry = 0) {
 		delete args.file;
 	}
 	
-	var url = make_url(action, args);
+	var url = this.make_url(action, args);
 	
 	const formData = {
 		file: fs.createReadStream(file)
@@ -99,8 +98,8 @@ function return_post_string(action, args, callback, retry = 0) {
 	request.post({ url: url, formData: formData }, (err, response, body) => {
 		retry++;
 		if (err) { 
-			error(err, " - Retry: " + retry); 
-			return return_string(action, args, callback, retry);
+			this.error(err, " - Retry: " + retry); 
+			return this.return_string(action, args, callback, retry);
 		}
 		else {
 			return callback(body);
@@ -109,8 +108,8 @@ function return_post_string(action, args, callback, retry = 0) {
 }
 
 
-function return_reply(action, args, callback) {
-	return return_string(action, args, function(data) {
+Browshot.prototype.return_reply = function(action, args, callback) {
+	return this.return_string(action, args, function(data) {
 		if (data == '') {
 			return callback({ error: 1, message: 'Invalid server response' });
 		}
@@ -120,8 +119,8 @@ function return_reply(action, args, callback) {
 			info = JSON.parse(data);
 		}
 		catch(e) {
-			error("Invalid JSON: " + e);
-			error (data);
+			this.error("Invalid JSON: " + e);
+			this.error(data);
 
 			return callback({error: 1, message: "Invalid server response"});
 		}
@@ -131,8 +130,8 @@ function return_reply(action, args, callback) {
 	});
 }
 
-function return_post_reply(action, args, callback) {
-	return return_post_string(action, args, function(data) {
+Browshot.prototype.return_post_reply = function(action, args, callback) {
+	return this.return_post_string(action, args, function(data) {
 		if (data == '') {
 			return callback({ error: 1, message: 'Invalid server response' });
 		}
@@ -166,8 +165,6 @@ function Browshot(key, debug = false, base = 'https://api.browshot.com/api/v1', 
   this.debug = debug;
 	this.base = base;
 	this.retry = retry;
-	
-	browshot = this;
 }
 
 Browshot.prototype.setKey = function(key) {
@@ -200,12 +197,12 @@ Browshot.prototype.apiVersion = function() {
  * @return {Object}   Return an array (status code, PNG).
  */
 Browshot.prototype.simple = function(args, callback) {
-	var url = make_url('simple', args);
+	var url = this.make_url('simple', args);
 	
 	var data = {code: 500, data: ''};
 	
 	baseRequest(url, (err, response, body) => {
-		if (err) { error(err); }
+		if (err) { this.error(err); }
 		
 		return callback({ code: response.statusCode, data: body });
 	});
@@ -222,11 +219,11 @@ Browshot.prototype.simple = function(args, callback) {
  * @return {Object}   Return an array (status code, file name). The file name is empty if the screenshot was not retrieved. 
  */
 Browshot.prototype.simpleFile = function(file, args, callback) {
-	var url = make_url('simple', args);
+	var url = this.make_url('simple', args);
 	
 	baseRequest({ url: url, encoding: null }, (err, response, body) => {
 		if (err || response.statusCode != 200) { 
-			error(err, ' ', url); 
+			this.error(err, ' ', url); 
 			
 			return callback({ code: response.statusCode, file: '' });
 		}
@@ -234,7 +231,7 @@ Browshot.prototype.simpleFile = function(file, args, callback) {
 		if (body != '') {
 			fs.writeFile(file, body, 'binary', (err) => {
 				if (err) {
-					error(err);
+					this.error(err);
 					
 					return callback({ code: response.statusCode, file: '' });
 				}
@@ -243,7 +240,7 @@ Browshot.prototype.simpleFile = function(file, args, callback) {
 			});
 		}
 		else {
-			error('No image returned');
+			this.error('No image returned');
 			return callback({ code: response.statusCode, file: '' });
 		}
 	});
@@ -258,11 +255,11 @@ Browshot.prototype.simpleFile = function(file, args, callback) {
  * @return {Object}   Return the list of instances.
  */
 Browshot.prototype.instanceList = function(callback) {
-	var url = make_url('instance/list');
+	var url = this.make_url('instance/list');
 	
 	request(url, (err, response, body) => {
 		if (err) {
-			error(err);
+			this.error(err);
 			return callback({status: 'error', error: err});
 		}
 		
@@ -280,16 +277,16 @@ Browshot.prototype.instanceList = function(callback) {
  */
 Browshot.prototype.instanceInfo = function(id = 0, callback) {
 	if (id == 0) {
-			error("Missing instance ID");
+			this.error("Missing instance ID");
 			return callback({status: 'error', error: 'Missing instance ID'});
 	}
 	
 	
-	var url = make_url('instance/info', { id: id });
+	var url = this.make_url('instance/info', { id: id });
 	
 	request(url, (err, response, body) => {
 		if (err) {
-			error(err);
+			this.error(err);
 			return callback({status: 'error', error: err});
 		}
 		
@@ -306,11 +303,11 @@ Browshot.prototype.instanceInfo = function(id = 0, callback) {
  * @return {Object}   Return the image content.
  */
 Browshot.prototype.browserList = function(callback) {
-	var url = make_url('browser/list');
+	var url = this.make_url('browser/list');
 	
 	request(url, (err, response, body) => {
 		if (err) {
-			error(err);
+			this.error(err);
 			return callback({status: 'error', error: err});
 		}
 		
@@ -328,16 +325,16 @@ Browshot.prototype.browserList = function(callback) {
  */
 Browshot.prototype.browserInfo = function(id = 0, callback) {
 	if (id == 0) {
-			error("Missing browser ID");
-			return callback({status: 'error', error: 'Missing browser ID'});
+		this.error("Missing browser ID");
+		return callback({status: 'error', error: 'Missing browser ID'});
 	}
 	
 	
-	var url = make_url('browser/info', { id: id });
+	var url = this.make_url('browser/info', { id: id });
 	
 	request(url, (err, response, body) => {
 		if (err) {
-			error(err);
+			this.error(err);
 			return callback({});
 		}
 		
@@ -356,15 +353,15 @@ Browshot.prototype.browserInfo = function(id = 0, callback) {
  */
 Browshot.prototype.screenshotCreate = function(args = { }, callback) {
 	if (! args.hasOwnProperty('url')) {
-			error("Missing URL");
+			this.error("Missing URL");
 			return callback({ status: 'error', error: "Missing URL" });
 	}
 	if (! args.hasOwnProperty('instance_id')) {
-			error("Missing instance ID");
+			this.error("Missing instance ID");
 			return callback({ status: 'error', error: "Missing instance ID" });
 	}
 	
-	return return_reply('screenshot/create', args, callback);
+	return this.return_reply('screenshot/create', args, callback);
 }
 
 /**
@@ -377,13 +374,13 @@ Browshot.prototype.screenshotCreate = function(args = { }, callback) {
  */
 Browshot.prototype.screenshotInfo = function(id = 0, args = { }, callback) {
 	if (id == 0) {
-			error("Missing screenshot ID");
+			this.error("Missing screenshot ID");
 			return callback({ status: 'error', error: "Missing screenshot ID" });
 	}
 	
 	args.id = id;
 
-	return return_reply('screenshot/info', args, callback);
+	return this.return_reply('screenshot/info', args, callback);
 }
 
 /**
@@ -394,7 +391,7 @@ Browshot.prototype.screenshotInfo = function(id = 0, args = { }, callback) {
  * @return {Object}   Return the screenshot list.
  */
 Browshot.prototype.screenshotList = function(args = { }, callback) {
-	return return_reply('screenshot/list', args, callback);
+	return this.return_reply('screenshot/list', args, callback);
 }
 
 /**
@@ -407,13 +404,13 @@ Browshot.prototype.screenshotList = function(args = { }, callback) {
  */
 Browshot.prototype.screenshotSearch = function(url = '', args = { }, callback) {
 	if (url == '') {
-			error("Missing URL");
-			return callback({ status: 'error', error: "Missing screenshot URL" });
+		this.error("Missing URL");
+		return callback({ status: 'error', error: "Missing screenshot URL" });
 	}
 	
 	args.url = url;
 
-	return return_reply('screenshot/search', args, callback);
+	return this.return_reply('screenshot/search', args, callback);
 }
 
 /**
@@ -426,13 +423,13 @@ Browshot.prototype.screenshotSearch = function(url = '', args = { }, callback) {
  */
 Browshot.prototype.screenshotHost = function(id = 0, args = { }, callback) {
 	if (id == 0) {
-			error("Missing screenshot ID");
-			return callback({ status: 'error', error: "Missing screenshot ID" });
+		this.error("Missing screenshot ID");
+		return callback({ status: 'error', error: "Missing screenshot ID" });
 	}
 	
 	args.id = id;
 
-	return return_reply('screenshot/host', args, callback);
+	return this.return_reply('screenshot/host', args, callback);
 }
 
 /**
@@ -445,22 +442,22 @@ Browshot.prototype.screenshotHost = function(id = 0, args = { }, callback) {
  */
 Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback, retry = 0) {
 	if (id == 0) {
-			error("Missing screenshot ID");
-			return callback('');
+		this.error("Missing screenshot ID");
+		return callback('');
 	}
 	
 	args.id = id;
 	
-	var url = make_url('screenshot/thumbnail', args);
+	var url = this.make_url('screenshot/thumbnail', args);
 
 	retry++;
 
-	info(`screenshotThumbnail retry ${retry}`);
+	this.info(`screenshotThumbnail retry ${retry}`);
 	baseRequest({ url: url, encoding: null }, (err, response, body) => {
 		if (err) {
-			error(err);
-			error(body);
-			if (retry >= browshot.retry) {
+			this.error(err);
+			this.error(body);
+			if (retry >= this.retry) {
 				return callback('');
 			}
 
@@ -468,26 +465,26 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback, 
 		}
 
 		if (response && response.statusCode != 200) {
-			error(`Image cannot be retrieved - ${retry}`);
-			if (retry >= browshot.retry) {
+			this.error(`Image cannot be retrieved - ${retry}`);
+			if (retry >= this.retry) {
 				return callback('');
 			}
 			
 			return this.screenshotThumbnail(id, args, callback, retry);
 		}
 
-		info(`imageType check`);
+		this.info(`imageType check`);
 		var imageInfo = imageType(body);
 		if (imageInfo == null || !imageInfo.hasOwnProperty('ext') || !['jpg', 'png'].includes(imageInfo.ext)) {
-			error(`Image cannot be retrieved: incorrect format - ${retry} - ${imageInfo.ext}`);
-			if (retry >= browshot.retry) {
+			this.error(`Image cannot be retrieved: incorrect format - ${retry} - ${imageInfo.ext}`);
+			if (retry >= this.retry) {
 				return callback('');
 			}
 				
 			return this.screenshotThumbnail(id, args, callback, retry);
 		}
 		
-		info(`screenshotThumbnail successful`);
+		this.info(`screenshotThumbnail successful`);
 		return callback(body);
 	});
 }
@@ -503,23 +500,23 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback, 
  */
 Browshot.prototype.shotThumbnail = function(id = 0, shot = 1, args = { }, callback, retry = 0) {
 	if (id == 0) {
-			error("Missing screenshot ID");
-			return callback(['', shot]);
+		this.error("Missing screenshot ID");
+		return callback(['', shot]);
 	}
 	
 	args.id = id;
 	args.shot = shot;
 	
-	var url = make_url('screenshot/thumbnail', args);
+	var url = this.make_url('screenshot/thumbnail', args);
 
 	retry++;
 
-	info(`shotThumbnail retry ${retry}`);
+	this.info(`shotThumbnail retry ${retry}`);
 	baseRequest({ url: url, encoding: null }, (err, response, body) => {
 		if (err) {
-			error(err);
-			error(body);
-			if (retry >= browshot.retry) {
+			this.error(err);
+			this.error(body);
+			if (retry >= this.retry) {
 				return callback(['', shot]);
 			}
 
@@ -527,26 +524,26 @@ Browshot.prototype.shotThumbnail = function(id = 0, shot = 1, args = { }, callba
 		}
 
 		if (response && response.statusCode != 200) {
-			error(`Image cannot be retrieved - ${retry}`);
-			if (retry >= browshot.retry) {
+			this.error(`Image cannot be retrieved - ${retry}`);
+			if (retry >= this.retry) {
 				return callback(['', shot]);
 			}
 			
 			return this.shotThumbnail(id, shot, args, callback, retry);
 		}
 
-		info(`imageType check`);
+		this.info(`imageType check`);
 		var imageInfo = imageType(body);
 		if (imageInfo == null || !imageInfo.hasOwnProperty('ext') || !['jpg', 'png'].includes(imageInfo.ext)) {
-			error(`Image cannot be retrieved: incorrect format - ${retry} - ${imageInfo.ext}`);
-			if (retry >= browshot.retry) {
+			this.error(`Image cannot be retrieved: incorrect format - ${retry} - ${imageInfo.ext}`);
+			if (retry >= this.retry) {
 				return callback(['', shot]);
 			}
 				
 			return this.shotThumbnail(id, shot, args, callback, retry);
 		}
 		
-		info(`shotThumbnail successful`);
+		this.info(`shotThumbnail successful`);
 		return callback([body, shot]);
 	});
 }
@@ -562,13 +559,13 @@ Browshot.prototype.shotThumbnail = function(id = 0, shot = 1, args = { }, callba
  */
 Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = { }, callback) {
 	if (id == 0) {
-			error("Missing screenshot ID");
-			return callback('');
+		this.error("Missing screenshot ID");
+		return callback('');
 	}
 	
 	if (file == '') {
-			error("Missing file");
-			return callback('');
+		this.error("Missing file");
+		return callback('');
 	}
 	
 	args.id = id;
@@ -577,7 +574,7 @@ Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = 
 		if (data != '') {
 			fs.writeFile(file, data, 'binary', (err) => {
 				if (err) {
-					error(err);
+					this.error(err);
 					
 					return callback('');
 				}
@@ -586,7 +583,7 @@ Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = 
 			});
 		}
 		else {
-			error("No screenshot retrieved");
+			this.error("No screenshot retrieved");
 			return callback('');
 		}
 		
@@ -603,13 +600,13 @@ Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = 
  */
 Browshot.prototype.screenshotShare = function(id = 0, args = { }, callback) {
 	if (id == 0) {
-			error("Missing screenshot ID");
-			return callback({status: 'error', error: 'Missing screenshot ID'});
+		this.error("Missing screenshot ID");
+		return callback({status: 'error', error: 'Missing screenshot ID'});
 	}
 	
 	args.id = id;
 
-	return return_reply('screenshot/share', args, callback);
+	return this.return_reply('screenshot/share', args, callback);
 }
 
 /**
@@ -622,13 +619,13 @@ Browshot.prototype.screenshotShare = function(id = 0, args = { }, callback) {
  */
 Browshot.prototype.screenshotDelete = function(id = 0, args = { }, callback) {
 	if (id == 0) {
-			error("Missing screenshot ID");
-			return callback({status: 'error', error: 'Missing screenshot ID'});
+		this.error("Missing screenshot ID");
+		return callback({status: 'error', error: 'Missing screenshot ID'});
 	}
 	
 	args.id = id;
 
-	return return_reply('screenshot/delete', args, callback);
+	return this.return_reply('screenshot/delete', args, callback);
 }
 
 /**
@@ -640,11 +637,11 @@ Browshot.prototype.screenshotDelete = function(id = 0, args = { }, callback) {
  */
 Browshot.prototype.screenshotHtml = function(id = 0, callback) {
 	if (id == 0) {
-			error("Missing screenshot ID");
-			return callback('');
+		this.error("Missing screenshot ID");
+		return callback('');
 	}
 
-	return return_string('screenshot/html', { id : id }, callback);
+	return this.return_string('screenshot/html', { id : id }, callback);
 }
 
 /**
@@ -655,7 +652,7 @@ Browshot.prototype.screenshotHtml = function(id = 0, callback) {
  * @return {Object}   The screenshots properties
  */
 Browshot.prototype.screenshotMultiple = function(args = { }, callback) {
-	return return_reply('screenshot/multiple', args, callback);
+	return this.return_reply('screenshot/multiple', args, callback);
 }
 
 
@@ -670,19 +667,19 @@ Browshot.prototype.screenshotMultiple = function(args = { }, callback) {
  */
 Browshot.prototype.batchCreate = function(file = '', instance_id = 0, args = { }, callback) {
 	if (file == '') {
-			error("Missing file");
+		this.error("Missing file");
 			return callback({status: 'error', error: 'Missing file'});
 	}
 	
 	if (instance_id == 0) {
-			error("Missing instance ID");
-			return callback({status: 'error', error: 'Missing instance ID'});
+		this.error("Missing instance ID");
+		return callback({status: 'error', error: 'Missing instance ID'});
 	}
 	
 	args.instance_id = instance_id;
 	args.file = file;
 	
-	return return_post_reply('batch/create', args, callback);
+	return this.return_post_reply('batch/create', args, callback);
 }
 
 /**
@@ -695,13 +692,13 @@ Browshot.prototype.batchCreate = function(file = '', instance_id = 0, args = { }
  */
 Browshot.prototype.batchInfo = function(id = 0, args = { }, callback) {
 	if (id == 0) {
-			error("Missing batch ID");
-			return callback({status: 'error', error: 'Missing batch ID'});
+		this.error("Missing batch ID");
+		return callback({status: 'error', error: 'Missing batch ID'});
 	}
 	
 	args.id = id;
 	
-	return return_reply('batch/info', args, callback);
+	return this.return_reply('batch/info', args, callback);
 }
 
 /**
@@ -712,7 +709,7 @@ Browshot.prototype.batchInfo = function(id = 0, args = { }, callback) {
  * @return {Object}   The account information properties
  */
 Browshot.prototype.accountInfo = function(args = { }, callback) {
-	return return_reply('account/info', args, callback);
+	return this.return_reply('account/info', args, callback);
 }
 
 

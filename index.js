@@ -55,7 +55,7 @@ Browshot.prototype.return_string = function (action, args, callback, retry = 0) 
 	if (retry > this.retry) {
 			this.error("Too many retries: ", retry, " - ", args.url || '');
 			
-			return callback('');
+			return callback('', this);
 	}
 	
 	var url = this.make_url(action, args);
@@ -71,7 +71,7 @@ Browshot.prototype.return_string = function (action, args, callback, retry = 0) 
 			return this.return_string(action, args, callback, retry);
 		}
 		else {
-			return callback(body);
+			return callback(body, this);
 		}
 	});
 }
@@ -80,7 +80,7 @@ Browshot.prototype.return_post_string = function (action, args, callback, retry 
 	if (retry > this.retry) {
 			this.error("Too many retries: ", retry, " - ", args.url || '');
 			
-			return callback('');
+			return callback('', this);
 	}
 	
 	var file = '';
@@ -102,16 +102,16 @@ Browshot.prototype.return_post_string = function (action, args, callback, retry 
 			return this.return_string(action, args, callback, retry);
 		}
 		else {
-			return callback(body);
+			return callback(body, this);
 		}
 	});
 }
 
 
 Browshot.prototype.return_reply = function(action, args, callback) {
-	return this.return_string(action, args, function(data) {
+	return this.return_string(action, args, function(data, self) {
 		if (data == '') {
-			return callback({ error: 1, message: 'Invalid server response' });
+			return callback({ error: 1, message: 'Invalid server response' }, self);
 		}
 
 		var info = {};
@@ -119,24 +119,24 @@ Browshot.prototype.return_reply = function(action, args, callback) {
 			info = JSON.parse(data);
 		}
 		catch(e) {
-			this.error("Invalid JSON: " + e);
-			this.error(data);
+			self.error("Invalid JSON: " + e);
+			self.error(data);
 
-			return callback({error: 1, message: "Invalid server response"});
+			return callback({error: 1, message: "Invalid server response"}, self);
 		}
 		
-		return callback(info);
+		return callback(info, self);
 		
 	});
 }
 
 Browshot.prototype.return_post_reply = function(action, args, callback) {
-	return this.return_post_string(action, args, function(data) {
+	return this.return_post_string(action, args, function(data, self) {
 		if (data == '') {
-			return callback({ error: 1, message: 'Invalid server response' });
+			return callback({ error: 1, message: 'Invalid server response' }, self);
 		}
 		
-		return callback(JSON.parse(data));
+		return callback(JSON.parse(data), self);
 		
 	});
 }

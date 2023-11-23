@@ -5,7 +5,7 @@ describe('API version test', function () {
 	var client = new browshot('');
 	
 	it('should return the API version as X.Y', function () {
-		assert.equal(client.apiVersion(), 1.26);
+		assert.equal(client.apiVersion(), 1.29);
 	});
 });
 

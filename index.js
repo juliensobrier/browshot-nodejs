@@ -144,7 +144,7 @@ Browshot.prototype.return_post_reply = function(action, args, callback) {
 /**
  * Nodejs library for Browshot (https://browshot.com/), a web service to create screenshots of web pages.
  * 
- * Browshot (http://www.browshot.com/) is a web service to easily make screenshots of web pages in any screen size, as any device: iPhone, iPad, Android, PC, etc. Browshot has full Flash, JavaScript, CSS, & HTML5 support.
+ * Browshot (http://www.browshot.com/) is a web service to easily make screenshots of web pages in any screen size, as any device: iPhone, iPad, Android, PC, etc. Browshot has full JavaScript, CSS, & HTML5 support.
  * The latest API version is detailed at http://browshot.com/api/documentation. This library follows the API documentation very closely: the function names are similar to the URLs used (screenshot/create becomes screenshotCreate(), 
  * instance/list becomes instanceList, etc.), the request arguments are exactly the same, etc.
  * 
@@ -699,6 +699,59 @@ Browshot.prototype.batchInfo = function(id = 0, args = { }, callback) {
 	args.id = id;
 	
 	return this.return_reply('batch/info', args, callback);
+}
+
+
+/**
+ * Crawl a domain and screenshot all pages.
+ * @link http://browshot.com/api/documentation#crawl_create
+ * @param  {String}   domain      Domain to crawl. Required. 
+ * @param  {String}   url        	URL to start with. Required.
+ * @param  {Number}   instance_id Instance ID. Required. 
+ * @param  {Object}   args        arguments. Optional.
+ * @param  {Function} callback    Callback function
+ * @return {Object}   The crawl properties
+ */
+Browshot.prototype.crawlCreate = function(domain = '', url = '', instance_id = 0, args = { }, callback) {
+	if (domain == '') {
+		this.error("Missing domain");
+			return callback({status: 'error', error: 'Missing domain'});
+	}
+
+	if (url == '') {
+		this.error("Missing url");
+			return callback({status: 'error', error: 'Missing url'});
+	}
+	
+	if (instance_id == 0) {
+		this.error("Missing instance ID");
+		return callback({status: 'error', error: 'Missing instance ID'});
+	}
+	
+	args.instance_id = instance_id;
+	args.domain = domain;
+	args.url = url;
+	
+	return this.return_reply('crawl/create', args, callback);
+}
+
+/**
+ * Get information about a crawl requested previously.
+ * @link http://browshot.com/api/documentation#batch_info 
+ * @param  {Number}   id       Crawl ID. Required. 
+ * @param  {Object}   args     arguments. Optional.
+ * @param  {Function} callback Callback function
+ * @return {Object}   The crawl properties
+ */
+Browshot.prototype.crawlInfo = function(id = 0, args = { }, callback) {
+	if (id == 0) {
+		this.error("Missing crawl ID");
+		return callback({status: 'error', error: 'Missing crawl ID'});
+	}
+	
+	args.id = id;
+	
+	return this.return_reply('crawl/info', args, callback);
 }
 
 /**

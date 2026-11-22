@@ -5,7 +5,7 @@ describe('API version test', function () {
 	var client = new browshot('');
 	
 	it('should return the API version as X.Y', function () {
-		assert.equal(client.apiVersion(), 1.29);
+		assert.equal(client.apiVersion(), 1.32);
 	});
 });
 
@@ -73,7 +73,7 @@ else {
 			
 			client.instanceInfo(-1, function(info) {
 				assert.ok('error' in info, "error is missing");
-				assert.ok('status' in info, "error message is missing");
+				assert.ok(typeof info.message === 'string' && info.message.length > 0, "error message is missing");
 				
 				assert.equal('width' in info, false, "browser default width should be missing");
 				assert.equal('height' in info, false, "browser default height should be missing");
@@ -115,9 +115,9 @@ else {
 		it('should fail invalid URL', function (done) {
 			this.timeout(1000 * 60 * 2);
 
-			client.screenshotCreate({ url: '-', instance_id: 12 }, function(info) {
-				assert.ok('status' in info, "Error is missing");
-				assert.ok('error' in info, "Error message is missing");
+			client.screenshotCreate({ url: 'http://', instance_id: 12 }, function(info) {
+				assert.ok(info.error, "Error is missing");
+				assert.ok(typeof info.message === 'string' && info.message.length > 0, "Error message is missing");
 				done();
 			});
 		});

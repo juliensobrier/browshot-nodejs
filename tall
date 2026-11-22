@@ -1,0 +1,408 @@
+[1mdiff --git a/README.md b/README.md[m
+[1mindex 098dd38..b0fbef4 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -1,6 +1,8 @@[m
+ Browshot[m
+ ================================[m
+ [m
+[32m+[m[32m# Browshot for Node.js[m
+[32m+[m
+ Browshot ( https://browshot.com/ ) is a web service to easily make screenshots of web pages in any screen size, as any device: iPhone, iPad, Android, PC, etc. Browshot has full Flash, JavaScript, CSS, & HTML5 support.[m
+ [m
+ The latest API version is detailed at https://browshot.com/api/documentation. browshot follows the API documentation very closely: the function names are similar to the URLs used (screenshot/create becomes screenshot_create(), instance/list becomes instance_list(), etc.), the request arguments are exactly the same, etc.[m
+[36m@@ -25,3 +27,242 @@[m [mDEPENDENCIES[m
+ The following npm modules are required to run browshot[m
+ [m
+     request[m
+[32m+[m[32m    image-type[m
+[32m+[m
+[32m+[m
+[32m+[m[32m## Features[m
+[32m+[m
+[32m+[m[32m- Desktop and mobile screenshots, including full-page captures and thumbnails.[m
+[32m+[m[32m- Browser and instance selection, including native clients in the United States, Germany, Australia, France, India, Finland, and the United Kingdom.[m
+[32m+[m[32m- Retina captures with `device_scale: 2`.[m
+[32m+[m[32m- Ad blocking with `hide_ads: 1`.[m
+[32m+[m[32m- PDFs with paper size, margins, orientation, backgrounds, and one-page output settings.[m
+[32m+[m[32m- Short videos in WebM, MP4, or animated GIF format.[m
+[32m+[m[32m- Screenshot status, metadata, rendered HTML, search, and listing.[m
+[32m+[m[32m- Multiple screenshot requests, batches, and crawls through the corresponding API methods.[m
+[32m+[m
+[32m+[m[32mAvailable browsers and capabilities depend on the selected instance. PDF and video require a paid Chrome-based instance.[m
+[32m+[m
+[32m+[m[32m## Install[m
+[32m+[m
+[32m+[m[32m```sh[m
+[32m+[m[32mnpm install browshot[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mCreate a [Browshot account](https://browshot.com/) and get an API key from your dashboard. Keep the key on your server.[m
+[32m+[m
+[32m+[m[32m```sh[m
+[32m+[m[32mexport BROWSHOT_API_KEY='your-api-key'[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m```js[m
+[32m+[m[32mconst Browshot = require('browshot');[m
+[32m+[m
+[32m+[m[32mconst client = new Browshot(process.env.BROWSHOT_API_KEY);[m
+[32m+[m[32mconsole.log(client.apiVersion()); // '1.32'[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mThe constructor also accepts a debug flag, API base URL, and retry limit:[m
+[32m+[m
+[32m+[m[32m```js[m
+[32m+[m[32mconst client = new Browshot([m
+[32m+[m[32m  process.env.BROWSHOT_API_KEY,[m
+[32m+[m[32m  false,[m
+[32m+[m[32m  'https://api.browshot.com/api/v1',[m
+[32m+[m[32m  3[m
+[32m+[m[32m);[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mKeep debugging disabled in production: debug output includes request URLs with the API key.[m
+[32m+[m
+[32m+[m[32m## How the API works[m
+[32m+[m
+[32m+[m[32m`client.screenshotCreate(options, callback)` submits a capture. The callback receives its details, including an `id` and a `status`. A capture can be `in_process`, `finished`, or `error`. If it is still pending, use `screenshotInfo` to check its status before downloading its artifacts.[m
+[32m+[m
+[32m+[m[32mMethods follow the API endpoint names in camelCase: `/screenshot/create` becomes `screenshotCreate`, `/instance/list` becomes `instanceList`, and `/screenshot/pdf` becomes `screenshotPdf`. Capture options use the API's original names, such as `instance_id` and `hide_ads`.[m
+[32m+[m
+[32m+[m[32mCallbacks receive the result directly; they do not use Node's `(error, result)` convention. JSON methods return an object. Binary download methods return a `Buffer`, or an empty string on failure. File helpers return the saved filename, or an empty string on failure.[m
+[32m+[m
+[32m+[m[32m### Wait for a capture[m
+[32m+[m
+[32m+[m[32mThe following helper checks status every two seconds and stops after five minutes. Reuse it in the examples below.[m
+[32m+[m
+[32m+[m[32m```js[m
+[32m+[m[32mfunction waitForCapture(screenshot, callback, started = Date.now()) {[m
+[32m+[m[32m  if (screenshot.error || screenshot.status === 'error') {[m
+[32m+[m[32m    return callback(new Error(screenshot.message || screenshot.error || 'Capture failed'));[m
+[32m+[m[32m  }[m
+[32m+[m[32m  if (screenshot.status === 'finished') {[m
+[32m+[m[32m    return callback(null, screenshot);[m
+[32m+[m[32m  }[m
+[32m+[m[32m  if (!screenshot.id || Date.now() - started >= 5 * 60 * 1000) {[m
+[32m+[m[32m    return callback(new Error('Capture did not finish within five minutes'));[m
+[32m+[m[32m  }[m
+[32m+[m[32m  setTimeout(() => {[m
+[32m+[m[32m    client.screenshotInfo(screenshot.id, {}, next => {[m
+[32m+[m[32m      waitForCapture(next, callback, started);[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }, 2000);[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m### Capture and save a screenshot[m
+[32m+[m
+[32m+[m[32m```js[m
+[32m+[m[32mclient.screenshotCreate({[m
+[32m+[m[32m  url: 'https://example.com/',[m
+[32m+[m[32m  instance_id: 373, // Chrome in France; see instanceList for available instances[m
+[32m+[m[32m  size: 'page',[m
+[32m+[m[32m  hide_ads: 1,[m
+[32m+[m[32m  device_scale: 2[m
+[32m+[m[32m}, screenshot => {[m
+[32m+[m[32m  waitForCapture(screenshot, (error, finished) => {[m
+[32m+[m[32m    if (error) return console.error(error.message);[m
+[32m+[m[32m    client.screenshotThumbnailFile(finished.id, 'example.png', {}, file => {[m
+[32m+[m[32m      if (!file) return console.error('Could not save the screenshot');[m
+[32m+[m[32m      console.log('Saved to ' + file);[m
+[32m+[m[32m    });[m
+[32m+[m[32m  });[m
+[32m+[m[32m});[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mUse `client.screenshotThumbnail(id, options, callback)` to receive image bytes instead of saving a file. Thumbnail options include `width`, `height`, and `format`.[m
+[32m+[m
+[32m+[m[32m### Generate and save a PDF[m
+[32m+[m
+[32m+[m[32mPDF is an extra artifact on a screenshot request. Set `pdf: 1` when creating the capture, then download it when the capture finishes.[m
+[32m+[m
+[32m+[m[32m```js[m
+[32m+[m[32mclient.screenshotCreate({[m
+[32m+[m[32m  url: 'https://example.com/',[m
+[32m+[m[32m  instance_id: 373,[m
+[32m+[m[32m  pdf: 1,[m
+[32m+[m[32m  pdf_format: 'a4',[m
+[32m+[m[32m  pdf_background: 1,[m
+[32m+[m[32m  pdf_landscape: 0,[m
+[32m+[m[32m  pdf_margin: '10mm',[m
+[32m+[m[32m  hide_ads: 1[m
+[32m+[m[32m}, screenshot => {[m
+[32m+[m[32m  waitForCapture(screenshot, (error, finished) => {[m
+[32m+[m[32m    if (error) return console.error(error.message);[m
+[32m+[m[32m    client.screenshotPdfFile(finished.id, 'example.pdf', {}, file => {[m
+[32m+[m[32m      if (!file) return console.error('Could not save the PDF');[m
+[32m+[m[32m      console.log('Saved to ' + file);[m
+[32m+[m[32m    });[m
+[32m+[m[32m  });[m
+[32m+[m[32m});[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mFor an existing completed PDF capture:[m
+[32m+[m
+[32m+[m[32m```js[m
+[32m+[m[32mclient.screenshotPdf(screenshotId, {}, pdf => {[m
+[32m+[m[32m  if (!Buffer.isBuffer(pdf)) return console.error('PDF unavailable');[m
+[32m+[m[32m  console.log('Downloaded ' + pdf.length + ' bytes');[m
+[32m+[m[32m});[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m### Record and save a video[m
+[32m+[m
+[32m+[m[32m```js[m
+[32m+[m[32mclient.screenshotCreate({[m
+[32m+[m[32m  url: 'https://example.com/',[m
+[32m+[m[32m  instance_id: 373,[m
+[32m+[m[32m  video: 1,[m
+[32m+[m[32m  video_format: 'webm', // 'mp4' and 'gif' are also supported[m
+[32m+[m[32m  video_duration: 5,[m
+[32m+[m[32m  video_fps: 24,[m
+[32m+[m[32m  video_scale: 0.5,[m
+[32m+[m[32m  hide_ads: 1[m
+[32m+[m[32m}, screenshot => {[m
+[32m+[m[32m  waitForCapture(screenshot, (error, finished) => {[m
+[32m+[m[32m    if (error) return console.error(error.message);[m
+[32m+[m[32m    client.screenshotVideoFile(finished.id, 'example.webm', {}, file => {[m
+[32m+[m[32m      if (!file) return console.error('Could not save the video');[m
+[32m+[m[32m      console.log('Saved to ' + file);[m
+[32m+[m[32m    });[m
+[32m+[m[32m  });[m
+[32m+[m[32m});[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mUse `client.screenshotVideo(id, {}, callback)` to receive a `Buffer`. Both download methods accept WebM, MP4, and GIF artifacts. MP4 requests can fall back to WebM; inspect the downloaded bytes before assuming the format. File helpers write the supplied path without changing its extension or converting the content.[m
+[32m+[m
+[32m+[m[32mFor animated GIF, set `video_format: 'gif'`. GIF uses 20 fps regardless of `video_fps`, and defaults to half-scale output. Video cannot be combined with `device_scale: 2`.[m
+[32m+[m
+[32m+[m[32m## API 1.32 capture options[m
+[32m+[m
+[32m+[m[32mAll options are passed through to the API; the service validates combinations and instance capabilities.[m
+[32m+[m
+[32m+[m[32m| Option | Values and default |[m
+[32m+[m[32m| --- | --- |[m
+[32m+[m[32m| `pdf` | `0` or `1`; default `0` |[m
+[32m+[m[32m| `pdf_format` | `letter` (default), `a4`, `legal` |[m
+[32m+[m[32m| `pdf_background` | `0` or `1`; default `0` |[m
+[32m+[m[32m| `pdf_one_page` | `0` or `1`; default `0` |[m
+[32m+[m[32m| `pdf_landscape` | `0` or `1`; default `0` |[m
+[32m+[m[32m| `pdf_margin` | Nonnegative CSS length in `px`, `mm`, `cm`, or `in`; default `0px` |[m
+[32m+[m[32m| `pdf_margin_top`, `pdf_margin_bottom`, `pdf_margin_left`, `pdf_margin_right` | Override the corresponding side of `pdf_margin` |[m
+[32m+[m[32m| `video` | `0` or `1`; default `0` |[m
+[32m+[m[32m| `video_format` | `webm` (default), `mp4`, `gif` |[m
+[32m+[m[32m| `video_duration` | Integer seconds, `1`–`30`; default `15` |[m
+[32m+[m[32m| `video_quality` | Integer `0`–`63`; default `30` |[m
+[32m+[m[32m| `video_fps` | Integer `1`–`30`; default `30`; GIF always uses `20` |[m
+[32m+[m[32m| `video_scale` | `0.1`–`1`; default `1` for WebM/MP4, `0.5` for GIF |[m
+[32m+[m[32m| `device_scale` | `1` (default) or `2`; `2` enables retina output |[m
+[32m+[m[32m| `hide_ads` | `0` or `1`; default `0` |[m
+[32m+[m
+[32m+[m[32mSet `pdf: 1` when supplying `pdf_*` options, and `video: 1` when supplying `video_*` options. The API rejects artifact settings when the corresponding artifact is disabled. Existing capture options continue to work with `screenshotCreate`.[m
+[32m+[m
+[32m+[m[32m### Countries and instances[m
+[32m+[m
+[32m+[m[32mChoose a country using `instance_id`. There is no new country override argument. The additional native instances are:[m
+[32m+[m
+[32m+[m[32m| Country | Chrome | Firefox | iPhone 12 | Samsung S20 |[m
+[32m+[m[32m| --- | --- | --- | --- | --- |[m
+[32m+[m[32m| France | 373 | 374 | 375 | 376 |[m
+[32m+[m[32m| India | 377 | 378 | 379 | 380 |[m
+[32m+[m[32m| Finland | 381 | 382 | 383 | 384 |[m
+[32m+[m[32m| United Kingdom | 385 | 386 | 387 | 388 |[m
+[32m+[m
+[32m+[m[32mEach of these instances has a base price of one credit. Existing US, German, and Australian instance IDs continue to work. Query the API for current availability and instance details:[m
+[32m+[m
+[32m+[m[32m```js[m
+[32m+[m[32mclient.instanceList(instances => {[m
+[32m+[m[32m  console.log(instances.shared);[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32mclient.instanceInfo(373, instance => {[m
+[32m+[m[32m  console.log(instance);[m
+[32m+[m[32m});[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m## Event and Promise interface[m
+[32m+[m
+[32m+[m[32mThe companion [`browshot-events`](https://www.npmjs.com/package/browshot-events) package wraps capture progress in events and artifact downloads in Promises.[m
+[32m+[m
+[32m+[m[32m```js[m
+[32m+[m[32mconst BrowshotEvents = require('browshot-events');[m
+[32m+[m[32mconst captures = new BrowshotEvents(process.env.BROWSHOT_API_KEY);[m
+[32m+[m
+[32m+[m[32mcaptures.screenshotCreate({[m
+[32m+[m[32m  url: 'https://example.com/', instance_id: 373, pdf: 1, hide_ads: 1[m
+[32m+[m[32m})[m
+[32m+[m[32m  .on('finished', screenshot => {[m
+[32m+[m[32m    captures.savePdf(screenshot.id, 'example.pdf')[m
+[32m+[m[32m      .then(file => console.log('Saved to ' + file))[m
+[32m+[m[32m      .catch(file => console.error('Could not save ' + file));[m
+[32m+[m[32m  })[m
+[32m+[m[32m  .on('failed', screenshot => console.error(screenshot))[m
+[32m+[m[32m  .on('timeout', screenshot => console.error('Timed out: ' + screenshot.id));[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m## Documentation and tests[m
+[32m+[m
+[32m+[m[32m- [API reference](https://browshot.com/api/documentation)[m
+[32m+[m[32m- [Node.js source](https://github.com/juliensobrier/browshot-nodejs)[m
+[32m+[m[32m- [Browshot website](https://browshot.com/)[m
+[32m+[m
+[32m+[m[32m```sh[m
+[32m+[m[32mnpm install[m
+[32m+[m[32mnpm test[m
+[32m+[m[32m```[m
+\ No newline at end of file[m
+[1mdiff --git a/index.js b/index.js[m
+[1mindex bd56070..89310f1 100644[m
+[1m--- a/index.js[m
+[1m+++ b/index.js[m
+[36m@@ -590,6 +590,99 @@[m [mBrowshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args =[m
+ 	});[m
+ }[m
+ [m
+[32m+[m[32m/**[m
+[32m+[m[32m * Retrieve a PDF generated with pdf=1.[m
+[32m+[m[32m * @link https://browshot.com/api/documentation#screenshot_pdf[m
+[32m+[m[32m * @param  {Number}   id          Screenshot ID. Required.[m
+[32m+[m[32m * @param  {Object}   args        arguments. Optional.[m
+[32m+[m[32m * @param  {Function} callback    Callback with a Buffer, or an empty string on failure.[m
+[32m+[m[32m */[m
+[32m+[m[32mBrowshot.prototype.screenshotPdf = function(id = 0, args = { }, callback) {[m
+[32m+[m	[32mreturn downloadArtifact(this, 'pdf', id, args, callback);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m/**[m
+[32m+[m[32m * Retrieve a video generated with video=1 (WebM, MP4 or GIF).[m
+[32m+[m[32m * @link https://browshot.com/api/documentation#screenshot_video[m
+[32m+[m[32m * @param  {Number}   id          Screenshot ID. Required.[m
+[32m+[m[32m * @param  {Object}   args        arguments. Optional.[m
+[32m+[m[32m * @param  {Function} callback    Callback with a Buffer, or an empty string on failure.[m
+[32m+[m[32m */[m
+[32m+[m[32mBrowshot.prototype.screenshotVideo = function(id = 0, args = { }, callback) {[m
+[32m+[m	[32mreturn downloadArtifact(this, 'video', id, args, callback);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m/**[m
+[32m+[m[32m * Retrieve a PDF and save it to a file.[m
+[32m+[m[32m * @param  {Number}   id          Screenshot ID. Required.[m
+[32m+[m[32m * @param  {String}   file        Local file name. Required.[m
+[32m+[m[32m * @param  {Object}   args        arguments. Optional.[m
+[32m+[m[32m * @param  {Function} callback    Callback with the file name, or an empty string on failure.[m
+[32m+[m[32m */[m
+[32m+[m[32mBrowshot.prototype.screenshotPdfFile = function(id = 0, file = '', args = { }, callback) {[m
+[32m+[m	[32mreturn saveArtifact(this, 'screenshotPdf', id, file, args, callback);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m/**[m
+[32m+[m[32m * Retrieve a video and save it to a file.[m
+[32m+[m[32m * The actual format can be WebM even when MP4 was requested.[m
+[32m+[m[32m * @param  {Number}   id          Screenshot ID. Required.[m
+[32m+[m[32m * @param  {String}   file        Local file name. Required.[m
+[32m+[m[32m * @param  {Object}   args        arguments. Optional.[m
+[32m+[m[32m * @param  {Function} callback    Callback with the file name, or an empty string on failure.[m
+[32m+[m[32m */[m
+[32m+[m[32mBrowshot.prototype.screenshotVideoFile = function(id = 0, file = '', args = { }, callback) {[m
+[32m+[m	[32mreturn saveArtifact(this, 'screenshotVideo', id, file, args, callback);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction downloadArtifact(client, format, id, args, callback, retry = 0) {[m
+[32m+[m	[32mif (id == 0) {[m
+[32m+[m		[32mclient.error("Missing screenshot ID");[m
+[32m+[m		[32mreturn callback('');[m
+[32m+[m	[32m}[m
+[32m+[m
+[32m+[m	[32mvar url = client.make_url('screenshot/' + format, Object.assign({}, args, { id: id }));[m
+[32m+[m	[32mreturn baseRequest({ url: url, encoding: null }, function(err, response, body) {[m
+[32m+[m		[32mif (err || !response || response.statusCode != 200) {[m
+[32m+[m			[32mif ((err || !response || response.statusCode >= 500 || response.statusCode == 429) && retry + 1 < client.retry) {[m
+[32m+[m				[32mreturn downloadArtifact(client, format, id, args, callback, retry + 1);[m
+[32m+[m			[32m}[m
+[32m+[m			[32mclient.error('Screenshot ' + format + ' cannot be retrieved');[m
+[32m+[m			[32mreturn callback('');[m
+[32m+[m		[32m}[m
+[32m+[m
+[32m+[m		[32mvar contentType = (response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();[m
+[32m+[m		[32mvar types = format == 'pdf' ? ['application/pdf'] : ['video/webm', 'video/mp4', 'image/gif'];[m
+[32m+[m		[32mif (!Buffer.isBuffer(body) || body.length == 0 || !types.includes(contentType)) {[m
+[32m+[m			[32mclient.error('Screenshot ' + format + ' cannot be retrieved: incorrect format');[m
+[32m+[m			[32mreturn callback('');[m
+[32m+[m		[32m}[m
+[32m+[m
+[32m+[m		[32mreturn callback(body);[m
+[32m+[m	[32m});[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction saveArtifact(client, method, id, file, args, callback) {[m
+[32m+[m	[32mif (id == 0 || file == '') {[m
+[32m+[m		[32mclient.error(id == 0 ? "Missing screenshot ID" : "Missing file");[m
+[32m+[m		[32mreturn callback('');[m
+[32m+[m	[32m}[m
+[32m+[m
+[32m+[m	[32mreturn client[method](id, args, function(data) {[m
+[32m+[m		[32mif (!Buffer.isBuffer(data) || data.length == 0) {[m
+[32m+[m			[32mreturn callback('');[m
+[32m+[m		[32m}[m
+[32m+[m
+[32m+[m		[32mfs.writeFile(file, data, function(err) {[m
+[32m+[m			[32mif (err) {[m
+[32m+[m				[32mclient.error('Screenshot could not be saved');[m
+[32m+[m				[32mreturn callback('');[m
+[32m+[m			[32m}[m
+[32m+[m			[32mreturn callback(file);[m
+[32m+[m		[32m});[m
+[32m+[m	[32m});[m
+[32m+[m[32m}[m
+[32m+[m
+ /**[m
+  * Share a screenshot.[m
+  * @link http://browshot.com/api/documentation#screenshot_share [m
+[1mdiff --git a/package.json b/package.json[m
+[1mindex 0279f67..1051122 100644[m
+[1m--- a/package.json[m
+[1m+++ b/package.json[m
+[36m@@ -1,6 +1,6 @@[m
+ {[m
+   "name": "browshot",[m
+[31m-  "version": "1.29.0",[m
+[32m+[m[32m  "version": "1.32.0",[m
+   "description": "Library for browshot.com, the screenshot service",[m
+   "main": "index.js",[m
+   "scripts": {[m
+[1mdiff --git a/test/test.js b/test/test.js[m
+[1mindex d1de972..64c283a 100644[m
+[1m--- a/test/test.js[m
+[1m+++ b/test/test.js[m
+[36m@@ -5,7 +5,7 @@[m [mdescribe('API version test', function () {[m
+ 	var client = new browshot('');[m
+ 	[m
+ 	it('should return the API version as X.Y', function () {[m
+[31m-		assert.equal(client.apiVersion(), 1.29);[m
+[32m+[m		[32massert.equal(client.apiVersion(), 1.32);[m
+ 	});[m
+ });[m
+ [m
+[36m@@ -73,7 +73,7 @@[m [melse {[m
+ 			[m
+ 			client.instanceInfo(-1, function(info) {[m
+ 				assert.ok('error' in info, "error is missing");[m
+[31m-				assert.ok('status' in info, "error message is missing");[m
+[32m+[m				[32massert.ok(typeof info.message === 'string' && info.message.length > 0, "error message is missing");[m
+ 				[m
+ 				assert.equal('width' in info, false, "browser default width should be missing");[m
+ 				assert.equal('height' in info, false, "browser default height should be missing");[m
+[36m@@ -115,9 +115,9 @@[m [melse {[m
+ 		it('should fail invalid URL', function (done) {[m
+ 			this.timeout(1000 * 60 * 2);[m
+ [m
+[31m-			client.screenshotCreate({ url: '-', instance_id: 12 }, function(info) {[m
+[31m-				assert.ok('status' in info, "Error is missing");[m
+[31m-				assert.ok('error' in info, "Error message is missing");[m
+[32m+[m			[32mclient.screenshotCreate({ url: 'http://', instance_id: 12 }, function(info) {[m
+[32m+[m				[32massert.ok(info.error, "Error is missing");[m
+[32m+[m				[32massert.ok(typeof info.message === 'string' && info.message.length > 0, "Error message is missing");[m
+ 				done();[m
+ 			});[m
+ 		});[m

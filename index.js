@@ -591,6 +591,99 @@ Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = 
 }
 
 /**
+ * Retrieve a PDF generated with pdf=1.
+ * @link https://browshot.com/api/documentation#screenshot_pdf
+ * @param  {Number}   id          Screenshot ID. Required.
+ * @param  {Object}   args        arguments. Optional.
+ * @param  {Function} callback    Callback with a Buffer, or an empty string on failure.
+ */
+Browshot.prototype.screenshotPdf = function(id = 0, args = { }, callback) {
+	return downloadArtifact(this, 'pdf', id, args, callback);
+}
+
+/**
+ * Retrieve a video generated with video=1 (WebM, MP4 or GIF).
+ * @link https://browshot.com/api/documentation#screenshot_video
+ * @param  {Number}   id          Screenshot ID. Required.
+ * @param  {Object}   args        arguments. Optional.
+ * @param  {Function} callback    Callback with a Buffer, or an empty string on failure.
+ */
+Browshot.prototype.screenshotVideo = function(id = 0, args = { }, callback) {
+	return downloadArtifact(this, 'video', id, args, callback);
+}
+
+/**
+ * Retrieve a PDF and save it to a file.
+ * @param  {Number}   id          Screenshot ID. Required.
+ * @param  {String}   file        Local file name. Required.
+ * @param  {Object}   args        arguments. Optional.
+ * @param  {Function} callback    Callback with the file name, or an empty string on failure.
+ */
+Browshot.prototype.screenshotPdfFile = function(id = 0, file = '', args = { }, callback) {
+	return saveArtifact(this, 'screenshotPdf', id, file, args, callback);
+}
+
+/**
+ * Retrieve a video and save it to a file.
+ * The actual format can be WebM even when MP4 was requested.
+ * @param  {Number}   id          Screenshot ID. Required.
+ * @param  {String}   file        Local file name. Required.
+ * @param  {Object}   args        arguments. Optional.
+ * @param  {Function} callback    Callback with the file name, or an empty string on failure.
+ */
+Browshot.prototype.screenshotVideoFile = function(id = 0, file = '', args = { }, callback) {
+	return saveArtifact(this, 'screenshotVideo', id, file, args, callback);
+}
+
+function downloadArtifact(client, format, id, args, callback, retry = 0) {
+	if (id == 0) {
+		client.error("Missing screenshot ID");
+		return callback('');
+	}
+
+	var url = client.make_url('screenshot/' + format, Object.assign({}, args, { id: id }));
+	return baseRequest({ url: url, encoding: null }, function(err, response, body) {
+		if (err || !response || response.statusCode != 200) {
+			if ((err || !response || response.statusCode >= 500 || response.statusCode == 429) && retry + 1 < client.retry) {
+				return downloadArtifact(client, format, id, args, callback, retry + 1);
+			}
+			client.error('Screenshot ' + format + ' cannot be retrieved');
+			return callback('');
+		}
+
+		var contentType = (response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+		var types = format == 'pdf' ? ['application/pdf'] : ['video/webm', 'video/mp4', 'image/gif'];
+		if (!Buffer.isBuffer(body) || body.length == 0 || !types.includes(contentType)) {
+			client.error('Screenshot ' + format + ' cannot be retrieved: incorrect format');
+			return callback('');
+		}
+
+		return callback(body);
+	});
+}
+
+function saveArtifact(client, method, id, file, args, callback) {
+	if (id == 0 || file == '') {
+		client.error(id == 0 ? "Missing screenshot ID" : "Missing file");
+		return callback('');
+	}
+
+	return client[method](id, args, function(data) {
+		if (!Buffer.isBuffer(data) || data.length == 0) {
+			return callback('');
+		}
+
+		fs.writeFile(file, data, function(err) {
+			if (err) {
+				client.error('Screenshot could not be saved');
+				return callback('');
+			}
+			return callback(file);
+		});
+	});
+}
+
+/**
  * Share a screenshot.
  * @link http://browshot.com/api/documentation#screenshot_share 
  * @param  {Number}   id          Screenshot ID. Required. 

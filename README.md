@@ -1,47 +1,21 @@
-Browshot
-================================
-
 # Browshot for Node.js
 
-Browshot ( https://browshot.com/ ) is a web service to easily make screenshots of web pages in any screen size, as any device: iPhone, iPad, Android, PC, etc. Browshot has full Flash, JavaScript, CSS, & HTML5 support.
-
-The latest API version is detailed at https://browshot.com/api/documentation. browshot follows the API documentation very closely: the function names are similar to the URLs used (screenshot/create becomes screenshot_create(), instance/list becomes instance_list(), etc.), the request arguments are exactly the same, etc.
-
-The library version matches closely the API version it handles: browshot 1.0.0 is the first release for the API 1.0, browshot 1.1.1 is the second release for the API 1.1, etc.
-
-browshot can handle most the API updates within the same major version, e.g. browshot 1.0.0 should be compatible with the API 1.1 or 1.2.
-
-You can install the library from npm: https://www.npmjs.com/package/browshot
-
-The source code can be found on github at https://github.com/juliensobrier/browshot-nodejs
-
-
-
-INSTALLATION
-
-    npm build && npm install
-
-
-DEPENDENCIES
-
-The following npm modules are required to run browshot
-
-    request
-    image-type
-
+Browshot captures web pages as screenshots, PDFs, and videos. The callback client supports API v1 and v2 in the same application.
 
 ## Features
 
 - Desktop and mobile screenshots, including full-page captures and thumbnails.
 - Browser and instance selection, including native clients in the United States, Germany, Australia, France, India, Finland, and the United Kingdom.
-- Retina captures with `device_scale: 2`.
+- Retina captures with `device_scale: 2` or `3`.
 - Ad blocking with `hide_ads: 1`.
 - PDFs with paper size, margins, orientation, backgrounds, and one-page output settings.
 - Short videos in WebM, MP4, or animated GIF format.
 - Screenshot status, metadata, rendered HTML, search, and listing.
 - Multiple screenshot requests, batches, and crawls through the corresponding API methods.
 
-Available browsers and capabilities depend on the selected instance. PDF and video require a paid Chrome-based instance.
+- Device discovery, tags, and S3 and webhook apps in API v2.
+
+Use Chrome or Brave for PDF and video in v2. With v1, use a paid Chrome-based instance.
 
 ## Install
 
@@ -59,7 +33,7 @@ export BROWSHOT_API_KEY='your-api-key'
 const Browshot = require('browshot');
 
 const client = new Browshot(process.env.BROWSHOT_API_KEY);
-console.log(client.apiVersion()); // '1.32'
+console.log(client.apiVersion()); // '2.0'
 ```
 
 The constructor also accepts a debug flag, API base URL, and retry limit:
@@ -73,9 +47,18 @@ const client = new Browshot(
 );
 ```
 
-Keep debugging disabled in production: debug output includes request URLs with the API key.
+An explicit base URL sets the default API version for that client.
 
 ## How the API works
+
+Requests with legacy options such as `instance_id`, `details`, `priority`, or `hosting` use v1. Requests with v2 capture options use v2. Shared calls such as `screenshotInfo` and `screenshotThumbnail` use v2 by default and accept IDs created through either API. To request the v1 metadata format, pass `{ api_version: 1 }` in the options.
+
+```js
+client.screenshotCreate({ url: 'https://example.com/', instance_id: 373 }, console.log);
+client.screenshotCreate({ url: 'https://example.com/', browser: 'brave', country: 'fr' }, console.log);
+```
+
+Use `deviceList` to find device keys, `tagList` to list capture tags, and `batchDownload(id, callback)` to retrieve a completed batch ZIP as a Buffer. App methods such as `appList` and `appCreate` manage v2 delivery destinations.
 
 `client.screenshotCreate(options, callback)` submits a capture. The callback receives its details, including an `id` and a `status`. A capture can be `in_process`, `finished`, or `error`. If it is still pending, use `screenshotInfo` to check its status before downloading its artifacts.
 
@@ -208,14 +191,14 @@ All options are passed through to the API; the service validates combinations an
 | `video_quality` | Integer `0`–`63`; default `30` |
 | `video_fps` | Integer `1`–`30`; default `30`; GIF always uses `20` |
 | `video_scale` | `0.1`–`1`; default `1` for WebM/MP4, `0.5` for GIF |
-| `device_scale` | `1` (default) or `2`; `2` enables retina output |
+| `device_scale` | `1` (default), `2`, or `3` |
 | `hide_ads` | `0` or `1`; default `0` |
 
 Set `pdf: 1` when supplying `pdf_*` options, and `video: 1` when supplying `video_*` options. The API rejects artifact settings when the corresponding artifact is disabled. Existing capture options continue to work with `screenshotCreate`.
 
 ### Countries and instances
 
-Choose a country using `instance_id`. There is no new country override argument. The additional native instances are:
+For v2, pass a country code such as `country: 'fr'`. For v1, select the country through `instance_id`. The additional native instances are listed below.
 
 | Country | Chrome | Firefox | iPhone 12 | Samsung S20 |
 | --- | --- | --- | --- | --- |
@@ -258,7 +241,8 @@ captures.screenshotCreate({
 
 ## Documentation and tests
 
-- [API reference](https://browshot.com/api/documentation)
+- [API v1 reference](https://browshot.com/api/documentation/)
+- [API v2 reference](https://browshot.com/api/documentation-v2/)
 - [Node.js source](https://github.com/juliensobrier/browshot-nodejs)
 - [Browshot website](https://browshot.com/)
 

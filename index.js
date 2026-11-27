@@ -7,6 +7,8 @@ const parseUrl = require('url').parse;
 
 var baseRequest = request.defaults({ maxRedirects: 32, strictSSL: false });
 process.setMaxListeners(64); 
+const browserNames = ['chrome', 'firefox', 'brave'];
+const sharedBrowserIds = ['40', '42', '44'];
 
 
 Browshot.prototype.info = function (/**/) {
@@ -28,9 +30,9 @@ Browshot.prototype._versionFor = function(action, args) {
 	if (version === '1' || version === '2') return version;
 	if (!this._autoApi) return null;
 	if (/^(instance\/|browser\/create$|screenshot\/host$)/.test(action)) return '1';
-	if (action === 'browser/info' && args.id != null && !['40', '42'].includes(String(args.id))) return '1';
+	if (action === 'browser/info' && args.id != null && !sharedBrowserIds.includes(String(args.id))) return '1';
 
-	const legacy = /^(instance_id|instance_ids|instances|screen|details|ids|hook(_.+)?|hosting(_.+)?|device_name|device_touch|device_mobile|device_landscape|user_agent)$/;
+	const legacy = /^(instance_id(?:\[\d*\])?|instance_ids|instances|screen|details|priority|ids|hook(_.+)?|hosting(_.+)?|device_name|device_touch|device_mobile|device_landscape|user_agent)$/;
 	if (Object.keys(args).some(key => legacy.test(key) && args[key] != null &&
 	    (!Array.isArray(args[key]) || args[key].length))) return '1';
 	return '2';
@@ -52,7 +54,7 @@ Browshot.prototype.make_url = function(action = '', args = {}) {
 			append(key, JSON.stringify(value));
 		} else if (key === 'apps' && typeof value === 'object' && !Array.isArray(value)) {
 			for (const app of Object.keys(value)) append('apps[' + app + ']', value[app]);
-		} else if (Array.isArray(value) && ['url', 'instance_id', 'apps'].includes(key)) {
+		} else if (Array.isArray(value) && ['url', 'instance_id', 'apps', 'tag'].includes(key)) {
 			for (const item of value) append(key, item);
 		} else {
 			append(key, value);
@@ -63,9 +65,9 @@ Browshot.prototype.make_url = function(action = '', args = {}) {
 };
 
 Browshot.prototype._request = function(action, args, options, callback) {
-	const v2Only = /^(browser|country|screen_width|screen_height|mobile|device|profiles|apps(\[.*\])?)$/;
+	const v2Only = /^(browser|country|mobile|device|profiles|tag|artifact_token|apps(\[.*\])?)$/;
 	const shared = this._autoApi && args.api_version == null && this._versionFor(action, args) === '2' &&
-		!/^(app\/|device\/|wait$|batch\/download$|ping$|simple\/)/.test(action) &&
+		!/^(app\/|device\/|tag\/|wait$|batch\/download$|ping$|simple\/)/.test(action) &&
 		!Object.keys(args).some(key => v2Only.test(key) && args[key] != null);
 	const url = this.make_url(action, args);
 	const send = (address, done) => baseRequest(Object.assign({ url: address }, options()), done);
@@ -302,8 +304,9 @@ Browshot.prototype.instanceInfo = function(id = 0, callback) {
  * @param  {Function} callback    Callback function
  * @return {Object}   Return the image content.
  */
-Browshot.prototype.browserList = function(callback) {
-	this._request('browser/list', {}, () => ({}), (err, response, body) => {
+Browshot.prototype.browserList = function(args = {}, callback) {
+	if (typeof args === 'function') return this.browserList({}, args);
+	this._request('browser/list', args, () => ({}), (err, response, body) => {
 		if (err) {
 			this.error(err);
 			return callback({status: 'error', error: err});
@@ -321,15 +324,16 @@ Browshot.prototype.browserList = function(callback) {
  * @param  {Function} callback    Callback function
  * @return {Object}   Return the browser properties.
  */
-Browshot.prototype.browserInfo = function(id = 0, callback) {
+Browshot.prototype.browserInfo = function(id = 0, args = {}, callback) {
+	if (typeof args === 'function') return this.browserInfo(id, {}, args);
 	if (id == 0) {
 		this.error("Missing browser ID");
 		return callback({status: 'error', error: 'Missing browser ID'});
 	}
 	
 	
-	const args = id === 'chrome' || id === 'firefox' ? { browser: id } : { id: id };
-	this._request('browser/info', args, () => ({}), (err, response, body) => {
+	const selector = browserNames.includes(id) ? { browser: id } : { id: id };
+	this._request('browser/info', Object.assign({}, args, selector), () => ({}), (err, response, body) => {
 		if (err) {
 			this.error(err);
 			return callback({});
@@ -386,6 +390,16 @@ Browshot.prototype.screenshotInfo = function(id = 0, args = { }, callback) {
 Browshot.prototype.screenshotList = function(args = { }, callback) {
 	return this.return_reply('screenshot/list', args, callback);
 }
+
+Browshot.prototype.screenshotListSlow = function(args = {}, callback) {
+	if (typeof args === 'function') return this.screenshotListSlow({}, args);
+	return this.return_reply('screenshot/list/slow', args, callback);
+};
+
+Browshot.prototype.tagList = function(args = {}, callback) {
+	if (typeof args === 'function') return this.tagList({}, args);
+	return this.return_reply('tag/list', args, callback);
+};
 
 /**
  * Get details about screenshots requested.
@@ -633,19 +647,23 @@ function downloadArtifact(client, format, id, args, callback, retry = 0) {
 	}
 
 	const query = Object.assign({}, args, { id: id });
-	return client._request('screenshot/' + format, query, () => ({ encoding: null }), function(err, response, body) {
+	const types = format == 'pdf' ? ['application/pdf'] : ['video/webm', 'video/mp4', 'image/gif'];
+	return downloadBinary(client, 'screenshot/' + format, query, types, callback, retry);
+}
+
+function downloadBinary(client, action, query, types, callback, retry = 0) {
+	return client._request(action, query, () => ({ encoding: null }), function(err, response, body) {
 		if (err || !response || response.statusCode != 200) {
 			if ((err || !response || response.statusCode >= 500 || response.statusCode == 429) && retry + 1 < client.retry) {
-				return downloadArtifact(client, format, id, args, callback, retry + 1);
+				return downloadBinary(client, action, query, types, callback, retry + 1);
 			}
-			client.error('Screenshot ' + format + ' cannot be retrieved');
+			client.error(action + ' cannot be retrieved');
 			return callback('');
 		}
 
 		var contentType = (response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-		var types = format == 'pdf' ? ['application/pdf'] : ['video/webm', 'video/mp4', 'image/gif'];
 		if (!Buffer.isBuffer(body) || body.length == 0 || !types.includes(contentType)) {
-			client.error('Screenshot ' + format + ' cannot be retrieved: incorrect format');
+			client.error(action + ' cannot be retrieved: incorrect format');
 			return callback('');
 		}
 
@@ -797,6 +815,16 @@ Browshot.prototype.batchInfo = function(id = 0, args = { }, callback) {
 	return this.return_reply('batch/info', args, callback);
 }
 
+Browshot.prototype.batchDownload = function(id = 0, args = {}, callback) {
+	if (typeof args === 'function') return this.batchDownload(id, {}, args);
+	if (id == 0) {
+		this.error('Missing batch ID');
+		return callback('');
+	}
+	return downloadBinary(this, 'batch/download', Object.assign({}, args, { id: id }),
+		['application/octet-stream', 'application/zip', 'application/x-zip-compressed'], callback);
+};
+
 
 /**
  * Crawl a domain and screenshot all pages.
@@ -869,6 +897,11 @@ Browshot.prototype.crawlInfo = function(id = 0, args = { }, callback) {
 Browshot.prototype.accountInfo = function(args = { }, callback) {
 	return this.return_reply('account/info', args, callback);
 }
+
+Browshot.prototype.ping = function(args = {}, callback) {
+	if (typeof args === 'function') return this.ping({}, args);
+	return this.return_string('ping', args, callback);
+};
 
 
 

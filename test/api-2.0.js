@@ -9,6 +9,9 @@ describe('API 2.0 routing', function () {
 	let server, client, requests;
 	const url = 'https://example.com/?a=1&b=two';
 	const image = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 255]);
+	const archive = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x80, 0xff]);
+	const pdf = Buffer.from('%PDF-1.4');
+	const video = Buffer.from('GIF89a');
 
 	before(function (done) {
 		server = http.createServer((request, response) => {
@@ -25,6 +28,16 @@ describe('API 2.0 routing', function () {
 					response.writeHead(302, { Location: 'simple/123?key=test-key' }).end();
 				} else if (query.pathname === '/api/v2/simple/123') {
 					response.writeHead(200, { 'Content-Type': 'image/png' }).end(image);
+				} else if (query.pathname === '/api/v2/screenshot/thumbnail' && !query.searchParams.has('missing')) {
+					response.writeHead(200, { 'Content-Type': 'image/png' }).end(image);
+				} else if (query.pathname === '/api/v2/screenshot/pdf') {
+					response.writeHead(200, { 'Content-Type': 'application/pdf' }).end(pdf);
+				} else if (query.pathname === '/api/v2/screenshot/video') {
+					response.writeHead(200, { 'Content-Type': 'image/gif' }).end(video);
+				} else if (query.pathname === '/api/v2/batch/download') {
+					response.writeHead(200, { 'Content-Type': 'application/octet-stream' }).end(archive);
+				} else if (query.pathname === '/api/v2/ping') {
+					response.writeHead(200, { 'Content-Type': 'text/plain' }).end('OK');
 				} else {
 					const unavailable = query.pathname.startsWith('/api/v2/') && query.searchParams.has('offline');
 					const missing = query.searchParams.has('missing');
@@ -59,6 +72,37 @@ describe('API 2.0 routing', function () {
 		assert.strictEqual(requests[3].query.searchParams.has('api_version'), false);
 	});
 
+	it('recognizes v1-only options and preserves legacy repeats and public browser IDs', async function () {
+		await call(client, 'screenshotCreate', { url, priority: 1 });
+		await call(client, 'screenshotMultiple', { urls: [url], instances: [13, 65] });
+		await call(client, 'screenshotMultiple', { urls: [url], 'instance_id[0]': 13 });
+		await call(client, 'browserInfo', 41);
+		await call(client, 'browserInfo', 44);
+		await call(client, 'browserInfo', 'brave');
+		await call(client, 'browserList', { api_version: 1 });
+		assert.deepStrictEqual(paths(), ['/api/v1/screenshot/create', '/api/v1/screenshot/multiple',
+			'/api/v1/screenshot/multiple', '/api/v1/browser/info', '/api/v2/browser/info',
+			'/api/v2/browser/info', '/api/v1/browser/list']);
+		assert.deepStrictEqual(requests[1].query.searchParams.getAll('instance_id'), ['13', '65']);
+		assert.strictEqual(requests[5].query.searchParams.get('browser'), 'brave');
+	});
+
+	it('keeps an explicit legacy base URL for legacy scripts', async function () {
+		client.setBase(client.base.replace(/v2$/, 'v1'));
+		await call(client, 'screenshotInfo', 123, {});
+		await call(client, 'browserList');
+		assert.deepStrictEqual(paths(), ['/api/v1/screenshot/info', '/api/v1/browser/list']);
+	});
+
+	it('uses shared downloads for an ID returned by a legacy capture', async function () {
+		const capture = await call(client, 'screenshotCreate', { url, instance_id: 373 });
+		assert.deepStrictEqual(await call(client, 'screenshotThumbnail', capture.id, {}), image);
+		assert.deepStrictEqual(await call(client, 'screenshotPdf', capture.id, {}), pdf);
+		assert.deepStrictEqual(await call(client, 'screenshotVideo', capture.id, {}), video);
+		assert.deepStrictEqual(paths(), ['/api/v1/screenshot/create', '/api/v2/screenshot/thumbnail',
+			'/api/v2/screenshot/pdf', '/api/v2/screenshot/video']);
+	});
+
 	it('uses v2 browser options, repeated URLs, profiles and app destinations', async function () {
 		const profiles = [{ browser: 'firefox', country: 'fr' }, { device: 'iphone_15_pro' }];
 		const args = { urls: [url, 'https://example.net/'], profiles, apps: { uploads: 'shot.png' } };
@@ -77,10 +121,16 @@ describe('API 2.0 routing', function () {
 		try {
 			await call(client, 'crawlCreate', 'example.com', { browser: 'firefox' });
 			await call(client, 'batchCreate', file, { country: 'fr' });
-			assert.deepStrictEqual(paths(), ['/api/v2/crawl/create', '/api/v2/batch/create']);
+			await call(client, 'crawlCreate', 'example.com', url, 373, { max: 10 });
+			await call(client, 'batchCreate', file, 373, { name: 'legacy' });
+			assert.deepStrictEqual(paths(), ['/api/v2/crawl/create', '/api/v2/batch/create',
+				'/api/v1/crawl/create', '/api/v1/batch/create']);
 			assert.strictEqual(requests[0].query.searchParams.has('url'), false);
 			assert.strictEqual(requests[1].method, 'POST');
 			assert(requests[1].body.includes(url));
+			assert.strictEqual(requests[2].query.searchParams.get('instance_id'), '373');
+			assert.strictEqual(requests[3].method, 'POST');
+			assert(requests[3].body.includes(url));
 		} finally {
 			fs.unlinkSync(file);
 		}
@@ -108,8 +158,22 @@ describe('API 2.0 routing', function () {
 		await call(client, 'screenshotInfo', 124, { missing: 1 });
 		await call(client, 'screenshotInfo', 125, { offline: 1, api_version: 2 });
 		await call(client, 'screenshotCreate', { url, country: 'fr', offline: 1 });
+		await call(client, 'screenshotList', { tag: ['launch', 'release'], offline: 1 });
+		await call(client, 'tagList', { offline: 1 });
 		assert.deepStrictEqual(paths(), ['/api/v2/screenshot/info', '/api/v1/screenshot/info',
-			'/api/v2/screenshot/info', '/api/v2/screenshot/info', '/api/v2/screenshot/create']);
+			'/api/v2/screenshot/info', '/api/v2/screenshot/info', '/api/v2/screenshot/create',
+			'/api/v2/screenshot/list', '/api/v2/tag/list']);
+		assert.deepStrictEqual(requests[5].query.searchParams.getAll('tag'), ['launch', 'release']);
+	});
+
+	it('calls the v2 status, slow list, tags and batch download endpoints', async function () {
+		assert.strictEqual(await call(client, 'ping'), 'OK');
+		await call(client, 'screenshotListSlow');
+		await call(client, 'tagList');
+		assert.deepStrictEqual(await call(client, 'batchDownload', 123), archive);
+		assert.deepStrictEqual(paths(), ['/api/v2/ping', '/api/v2/screenshot/list/slow',
+			'/api/v2/tag/list', '/api/v2/batch/download']);
+		assert.strictEqual(requests[3].query.searchParams.get('id'), '123');
 	});
 
 	it('reports a failed thumbnail file download through the callback', async function () {

@@ -4,6 +4,8 @@
 
 - Select API v1 for legacy request parameters and API v2 for shared endpoints and new options.
 - Support v2 synchronous captures, app management, and device discovery.
+- Recognize Brave and keep v1 priority and legacy instance arrays on v1.
+- Add `tagList`, `screenshotListSlow`, `batchDownload`, and `ping`.
 - Return the existing empty result through the callback when a thumbnail file download fails.
 
 ## 1.32.0

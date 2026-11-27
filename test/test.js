@@ -5,7 +5,7 @@ describe('API version test', function () {
 	var client = new browshot('');
 	
 	it('should return the API version as X.Y', function () {
-		assert.equal(client.apiVersion(), 1.32);
+		assert.strictEqual(client.apiVersion(), '2.0');
 	});
 });
 
@@ -15,7 +15,7 @@ if(! process.env.BROWSHOT_API_KEY) {
 }
 else {
 	const debug = process.env.BROWSHOT_DEBUG || false;
-	var client = new browshot(process.env.BROWSHOT_API_KEY, debug);
+	var client = new browshot(process.env.BROWSHOT_API_KEY, debug, 'https://api.browshot.com/api/v1');
 
 	describe('Simple API tests', function () {
 		it('should return an image file', function (done) {

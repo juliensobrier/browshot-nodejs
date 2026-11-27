@@ -3,6 +3,7 @@
 const request = require('request');
 const fs = require("fs");
 const imageType = require('image-type');
+const parseUrl = require('url').parse;
 
 var baseRequest = request.defaults({ maxRedirects: 32, strictSSL: false });
 process.setMaxListeners(64); 
@@ -22,91 +23,91 @@ Browshot.prototype.error = function (/**/) {
 	console.log('ERROR ' + args.join(''));
 }
 
-Browshot.prototype.make_url = function(action, args = {}) {
-	var url = this.base + "/" + (action || '') + '?key=' + encodeURIComponent(this.key);
+Browshot.prototype._versionFor = function(action, args) {
+	const version = String(args.api_version);
+	if (version === '1' || version === '2') return version;
+	if (!this._autoApi) return null;
+	if (/^(instance\/|browser\/create$|screenshot\/host$)/.test(action)) return '1';
+	if (action === 'browser/info' && args.id != null && !['40', '42'].includes(String(args.id))) return '1';
 
-	
-	if (args.hasOwnProperty('urls')) {
-		args.urls.forEach(function(uri) {
-				url += '&url=' + encodeURIComponent(uri);
-		});
-		
-		delete args.urls;
-	}
-	
-	if (args.hasOwnProperty('instances')) {
-		args.instances.forEach(function(instance) {
-				url += '&instance_id=' + encodeURIComponent(instance);
-		});
-		
-		delete args.instances;
+	const legacy = /^(instance_id|instance_ids|instances|screen|details|ids|hook(_.+)?|hosting(_.+)?|device_name|device_touch|device_mobile|device_landscape|user_agent)$/;
+	if (Object.keys(args).some(key => legacy.test(key) && args[key] != null &&
+	    (!Array.isArray(args[key]) || args[key].length))) return '1';
+	return '2';
+};
+
+Browshot.prototype.make_url = function(action = '', args = {}) {
+	const version = this._versionFor(action, args);
+	const base = this.base.replace(/\/$/, '').replace(/\/api\/v[12]$/, match => version ? '/api/v' + version : match);
+	let url = base + '/' + action + '?key=' + encodeURIComponent(this.key);
+	function append(key, value) {
+		if (value != null) url += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(value);
 	}
 
-	for(var key in args) {
-		url += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(args[key]);
+	for (const name of Object.keys(args)) {
+		const value = args[name];
+		if (name === 'api_version' || value == null) continue;
+		const key = name === 'urls' ? 'url' : name === 'instances' ? 'instance_id' : name;
+		if (key === 'profiles' && Array.isArray(value)) {
+			append(key, JSON.stringify(value));
+		} else if (key === 'apps' && typeof value === 'object' && !Array.isArray(value)) {
+			for (const app of Object.keys(value)) append('apps[' + app + ']', value[app]);
+		} else if (Array.isArray(value) && ['url', 'instance_id', 'apps'].includes(key)) {
+			for (const item of value) append(key, item);
+		} else {
+			append(key, value);
+		}
 	}
-	
-	this.info(url);
-
+	this.info(base + '/' + action);
 	return url;
-}
+};
 
-Browshot.prototype.return_string = function (action, args, callback, retry = 0) {
-	if (retry > this.retry) {
-			this.error("Too many retries: ", retry, " - ", args.url || '');
-			
-			return callback('', this);
-	}
-	
-	var url = this.make_url(action, args);
-	
-	baseRequest(url, (err, response, body) => {
-		retry++;
-		if (err) { 
-			this.error(err, " - Retry: " + retry); 
-			return this.return_string(action, args, callback, retry);
+Browshot.prototype._request = function(action, args, options, callback) {
+	const v2Only = /^(browser|country|screen_width|screen_height|mobile|device|profiles|apps(\[.*\])?)$/;
+	const shared = this._autoApi && args.api_version == null && this._versionFor(action, args) === '2' &&
+		!/^(app\/|device\/|wait$|batch\/download$|ping$|simple\/)/.test(action) &&
+		!Object.keys(args).some(key => v2Only.test(key) && args[key] != null);
+	const url = this.make_url(action, args);
+	const send = (address, done) => baseRequest(Object.assign({ url: address }, options()), done);
+
+	return send(url, (err, response, body) => {
+		if (!err && shared && response.statusCode === 404 &&
+		    response.request.uri.pathname === parseUrl(url).pathname &&
+		    /^application\/json(?:;|$)/i.test(response.headers['content-type'] || '')) {
+			let error;
+			try {
+				error = JSON.parse(body.toString());
+			} catch (_) {
+				// A regular 404 response is returned to the caller.
+			}
+			if (error && error.success === false && error.error === 'NOT_FOUND' && error.message === 'Page not found') {
+				return send(this.make_url(action, Object.assign({}, args, { api_version: 1 })), callback);
+			}
 		}
-		else if (response && response.statusCode >= 400 && retry <= this.retry) {
-			this.error(err, " - Retry: " + retry); 
-			return this.return_string(action, args, callback, retry);
-		}
-		else {
-			return callback(body, this);
-		}
+		return callback(err, response, body);
 	});
-}
+};
 
-Browshot.prototype.return_post_string = function (action, args, callback, retry = 0) {
-	if (retry > this.retry) {
-			this.error("Too many retries: ", retry, " - ", args.url || '');
-			
-			return callback('', this);
-	}
-	
-	var file = '';
-	if (args.hasOwnProperty('file')) {
-		file = args.file;
-		delete args.file;
-	}
-	
-	var url = this.make_url(action, args);
-	
-	const formData = {
-		file: fs.createReadStream(file)
-	};
-	
-	request.post({ url: url, formData: formData }, (err, response, body) => {
-		retry++;
-		if (err) { 
-			this.error(err, " - Retry: " + retry); 
-			return this.return_string(action, args, callback, retry);
+Browshot.prototype.return_string = function(action, args, callback, retry = 0) {
+	return this._request(action, args, () => ({}), (err, response, body) => {
+		const version = this._versionFor(action, args);
+		if (retry < this.retry && (version !== '2' || /\/(info|list|search|html)$/.test(action)) &&
+		    (err || response.statusCode >= 400)) {
+			return this.return_string(action, args, callback, retry + 1);
 		}
-		else {
-			return callback(body, this);
-		}
+		return callback(err ? '' : body, this);
 	});
-}
+};
 
+Browshot.prototype.return_post_string = function(action, args, callback) {
+	const query = Object.assign({}, args);
+	const file = query.file;
+	delete query.file;
+	return this._request(action, query, () => ({
+		method: 'POST',
+		formData: { file: fs.createReadStream(file) }
+	}), (err, response, body) => callback(err ? '' : body, this));
+};
 
 Browshot.prototype.return_reply = function(action, args, callback) {
 	return this.return_string(action, args, function(data, self) {
@@ -160,10 +161,10 @@ Browshot.prototype.return_post_reply = function(action, args, callback) {
  * @param  {String}   base  Change the API base URL. Used with private servers only. Optional.
  * @param {Number}    retry The number of times to retry a screenshot if an error occurs in the API call. 3 by default. optional.
  */
-function Browshot(key, debug = false, base = 'https://api.browshot.com/api/v1', retry = 3) {
+function Browshot(key, debug = false, base = null, retry = 3) {
   this.key = key;
   this.debug = debug;
-	this.base = base;
+	this.setBase(base);
 	this.retry = retry;
 }
 
@@ -173,8 +174,9 @@ Browshot.prototype.setKey = function(key) {
 Browshot.prototype.setDebug = function(debug = false) {
   this.debug = debug;
 };
-Browshot.prototype.setBase = function(base = 'https://api.browshot.com/api/v1') {
-  this.base= base;
+Browshot.prototype.setBase = function(base = null) {
+  this._autoApi = base == null;
+  this.base = this._autoApi ? 'https://api.browshot.com/api/v2' : base;
 };
 
 
@@ -196,15 +198,14 @@ Browshot.prototype.apiVersion = function() {
  * @param  {Function} callback    Callback function
  * @return {Object}   Return an array (status code, PNG).
  */
-Browshot.prototype.simple = function(args, callback) {
-	var url = this.make_url('simple', args);
+Browshot.prototype.simple = function(args = {}, callback) {
 	
 	var data = {code: 500, data: ''};
 	
-	baseRequest(url, (err, response, body) => {
+	this._request('simple', args, () => ({}), (err, response, body) => {
 		if (err) { this.error(err); }
 		
-		return callback({ code: response.statusCode, data: body });
+		return callback({ code: response ? response.statusCode : 500, data: body || '' });
 	});
 	
 	return data;
@@ -218,14 +219,13 @@ Browshot.prototype.simple = function(args, callback) {
  * @param  {Function} callback    Callback function
  * @return {Object}   Return an array (status code, file name). The file name is empty if the screenshot was not retrieved. 
  */
-Browshot.prototype.simpleFile = function(file, args, callback) {
-	var url = this.make_url('simple', args);
+Browshot.prototype.simpleFile = function(file, args = {}, callback) {
 	
-	baseRequest({ url: url, encoding: null }, (err, response, body) => {
+	this._request('simple', args, () => ({ encoding: null }), (err, response, body) => {
 		if (err || response.statusCode != 200) { 
-			this.error(err, ' ', url); 
+			this.error(err);
 			
-			return callback({ code: response.statusCode, file: '' });
+			return callback({ code: response ? response.statusCode : 500, file: '' });
 		}
 		
 		if (body != '') {
@@ -270,7 +270,7 @@ Browshot.prototype.instanceList = function(callback) {
 /**
  * Return the details of an instance.
  * @link http://browshot.com/api/documentation#instance_info
- * @param  {Number}   id          Instance ID. Required. 
+ * @param  {Number}   id          Instance ID. Required.
  * @param  {Object}   args        arguments. Optional.
  * @param  {Function} callback    Callback function
  * @return {Object}   Return the instance properties.
@@ -303,9 +303,7 @@ Browshot.prototype.instanceInfo = function(id = 0, callback) {
  * @return {Object}   Return the image content.
  */
 Browshot.prototype.browserList = function(callback) {
-	var url = this.make_url('browser/list');
-	
-	request(url, (err, response, body) => {
+	this._request('browser/list', {}, () => ({}), (err, response, body) => {
 		if (err) {
 			this.error(err);
 			return callback({status: 'error', error: err});
@@ -330,9 +328,8 @@ Browshot.prototype.browserInfo = function(id = 0, callback) {
 	}
 	
 	
-	var url = this.make_url('browser/info', { id: id });
-	
-	request(url, (err, response, body) => {
+	const args = id === 'chrome' || id === 'firefox' ? { browser: id } : { id: id };
+	this._request('browser/info', args, () => ({}), (err, response, body) => {
 		if (err) {
 			this.error(err);
 			return callback({});
@@ -355,10 +352,6 @@ Browshot.prototype.screenshotCreate = function(args = { }, callback) {
 	if (! args.hasOwnProperty('url')) {
 			this.error("Missing URL");
 			return callback({ status: 'error', error: "Missing URL" });
-	}
-	if (! args.hasOwnProperty('instance_id')) {
-			this.error("Missing instance ID");
-			return callback({ status: 'error', error: "Missing instance ID" });
 	}
 	
 	return this.return_reply('screenshot/create', args, callback);
@@ -448,12 +441,11 @@ Browshot.prototype.screenshotThumbnail = function(id = 0, args = { }, callback, 
 	
 	args.id = id;
 	
-	var url = this.make_url('screenshot/thumbnail', args);
 
 	retry++;
 
 	this.info(`screenshotThumbnail retry ${retry}`);
-	baseRequest({ url: url, encoding: null }, (err, response, body) => {
+	this._request('screenshot/thumbnail', args, () => ({ encoding: null }), (err, response, body) => {
 		if (err) {
 			this.error(err);
 			this.error(body);
@@ -507,12 +499,11 @@ Browshot.prototype.shotThumbnail = function(id = 0, shot = 1, args = { }, callba
 	args.id = id;
 	args.shot = shot;
 	
-	var url = this.make_url('screenshot/thumbnail', args);
 
 	retry++;
 
 	this.info(`shotThumbnail retry ${retry}`);
-	baseRequest({ url: url, encoding: null }, (err, response, body) => {
+	this._request('screenshot/thumbnail', args, () => ({ encoding: null }), (err, response, body) => {
 		if (err) {
 			this.error(err);
 			this.error(body);
@@ -570,7 +561,7 @@ Browshot.prototype.screenshotThumbnailFile = function(id = 0, file = '', args = 
 	
 	args.id = id;
 	
-	this.screenshotThumbnail(id, args, function(data) {
+	this.screenshotThumbnail(id, args, (data) => {
 		if (data != '') {
 			fs.writeFile(file, data, 'binary', (err) => {
 				if (err) {
@@ -641,8 +632,8 @@ function downloadArtifact(client, format, id, args, callback, retry = 0) {
 		return callback('');
 	}
 
-	var url = client.make_url('screenshot/' + format, Object.assign({}, args, { id: id }));
-	return baseRequest({ url: url, encoding: null }, function(err, response, body) {
+	const query = Object.assign({}, args, { id: id });
+	return client._request('screenshot/' + format, query, () => ({ encoding: null }), function(err, response, body) {
 		if (err || !response || response.statusCode != 200) {
 			if ((err || !response || response.statusCode >= 500 || response.statusCode == 429) && retry + 1 < client.retry) {
 				return downloadArtifact(client, format, id, args, callback, retry + 1);
@@ -728,13 +719,17 @@ Browshot.prototype.screenshotDelete = function(id = 0, args = { }, callback) {
  * @param  {Function} callback    Callback function
  * @return {Object}   The HTML code
  */
-Browshot.prototype.screenshotHtml = function(id = 0, callback) {
+Browshot.prototype.screenshotHtml = function(id = 0, args = {}, callback) {
+	if (typeof args === 'function') {
+		callback = args;
+		args = {};
+	}
 	if (id == 0) {
 		this.error("Missing screenshot ID");
 		return callback('');
 	}
 
-	return this.return_string('screenshot/html', { id : id }, callback);
+	return this.return_string('screenshot/html', Object.assign({}, args, { id: id }), callback);
 }
 
 /**
@@ -753,23 +748,31 @@ Browshot.prototype.screenshotMultiple = function(args = { }, callback) {
  * Request multiple screenshots from a text file.
  * @link http://browshot.com/api/documentation#batch_create
  * @param  {String}   file        File path. Required. 
- * @param  {Number}   instance_id Instance ID. Required. 
+ * @param  {Number}   instance_id Legacy instance ID. Optional.
  * @param  {Object}   args        arguments. Optional.
  * @param  {Function} callback    Callback function
  * @return {Object}   The batch properties
  */
-Browshot.prototype.batchCreate = function(file = '', instance_id = 0, args = { }, callback) {
+Browshot.prototype.batchCreate = function(file = '', instance_id = null, args = {}, callback) {
+	if (typeof instance_id === 'function') {
+		callback = instance_id;
+		instance_id = null;
+	} else if (instance_id && typeof instance_id === 'object') {
+		callback = args;
+		args = instance_id;
+		instance_id = null;
+	} else if (typeof args === 'function') {
+		callback = args;
+		args = {};
+	}
 	if (file == '') {
 		this.error("Missing file");
 			return callback({status: 'error', error: 'Missing file'});
 	}
 	
-	if (instance_id == 0) {
-		this.error("Missing instance ID");
-		return callback({status: 'error', error: 'Missing instance ID'});
-	}
 	
-	args.instance_id = instance_id;
+	args = Object.assign({}, args);
+	if (instance_id != null) args.instance_id = instance_id;
 	args.file = file;
 	
 	return this.return_post_reply('batch/create', args, callback);
@@ -800,30 +803,39 @@ Browshot.prototype.batchInfo = function(id = 0, args = { }, callback) {
  * @link http://browshot.com/api/documentation#crawl_create
  * @param  {String}   domain      Domain to crawl. Required. 
  * @param  {String}   url        	URL to start with. Required.
- * @param  {Number}   instance_id Instance ID. Required. 
+ * @param  {Number}   instance_id Legacy instance ID. Optional.
  * @param  {Object}   args        arguments. Optional.
  * @param  {Function} callback    Callback function
  * @return {Object}   The crawl properties
  */
-Browshot.prototype.crawlCreate = function(domain = '', url = '', instance_id = 0, args = { }, callback) {
+Browshot.prototype.crawlCreate = function(domain = '', url = '', instance_id = null, args = {}, callback) {
+	if (typeof url === 'function' || (url && typeof url === 'object')) {
+		callback = typeof url === 'function' ? url : instance_id;
+		args = typeof url === 'function' ? {} : url;
+		url = '';
+		instance_id = null;
+	} else if (typeof instance_id === 'function') {
+		callback = instance_id;
+		instance_id = null;
+	} else if (instance_id && typeof instance_id === 'object') {
+		callback = args;
+		args = instance_id;
+		instance_id = null;
+	} else if (typeof args === 'function') {
+		callback = args;
+		args = {};
+	}
 	if (domain == '') {
 		this.error("Missing domain");
 			return callback({status: 'error', error: 'Missing domain'});
 	}
 
-	if (url == '') {
-		this.error("Missing url");
-			return callback({status: 'error', error: 'Missing url'});
-	}
 	
-	if (instance_id == 0) {
-		this.error("Missing instance ID");
-		return callback({status: 'error', error: 'Missing instance ID'});
-	}
 	
-	args.instance_id = instance_id;
+	args = Object.assign({}, args);
+	if (instance_id != null) args.instance_id = instance_id;
 	args.domain = domain;
-	args.url = url;
+	if (url) args.url = url;
 	
 	return this.return_reply('crawl/create', args, callback);
 }
@@ -859,5 +871,58 @@ Browshot.prototype.accountInfo = function(args = { }, callback) {
 }
 
 
+
+Browshot.prototype.deviceList = function(args, callback) {
+	if (typeof args === 'function') return this.deviceList({}, args);
+	return this.return_reply('device/list', args, callback);
+};
+
+Browshot.prototype.appList = function(args, callback) {
+	if (typeof args === 'function') return this.appList({}, args);
+	return this.return_reply('app/list', args, callback);
+};
+
+Browshot.prototype.appInfo = function(id, args, callback) {
+	if (typeof args === 'function') return this.appInfo(id, {}, args);
+	return this.return_reply('app/info', Object.assign({}, args, { id: id }), callback);
+};
+
+Browshot.prototype.appCreate = function(args, callback) {
+	return appRequest(this, 'app/create', args, callback);
+};
+
+Browshot.prototype.appUpdate = function(id, args, callback) {
+	return appRequest(this, 'app/update', Object.assign({}, args, { id: id }), callback);
+};
+
+Browshot.prototype.appDelete = function(id, args, callback) {
+	if (typeof args === 'function') return this.appDelete(id, {}, args);
+	return appRequest(this, 'app/delete', Object.assign({}, args, { id: id }), callback);
+};
+
+Browshot.prototype.appTest = function(id, args, callback) {
+	if (typeof args === 'function') return this.appTest(id, {}, args);
+	return appRequest(this, 'app/test', Object.assign({}, args, { id: id }), callback);
+};
+
+Browshot.prototype.appRun = function(id, apps, args, callback) {
+	if (typeof args === 'function') return this.appRun(id, apps, {}, args);
+	return appRequest(this, 'app/run', Object.assign({}, args, { screenshot_id: id, apps: apps }), callback);
+};
+
+function appRequest(client, action, args, callback) {
+	const body = Object.assign({}, args);
+	const query = { api_version: body.api_version };
+	delete body.api_version;
+	for (const field of ['id', 'screenshot_id']) {
+		if (typeof body[field] === 'string' && /^\d+$/.test(body[field])) body[field] = Number(body[field]);
+	}
+	if (body.isActive === 0 || body.isActive === 1) body.isActive = Boolean(body.isActive);
+	if (Array.isArray(body.apps)) body.apps = body.apps.map(String);
+	return client._request(action, query, () => ({ method: 'POST', json: body, strictSSL: true }), (err, response, data) => {
+		return callback(err || typeof data !== 'object' || data === null ?
+			{ error: 1, message: 'Invalid server response' } : data, client);
+	});
+}
 
 module.exports = Browshot;

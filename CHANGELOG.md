@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0
+
+- Select API v1 for legacy request parameters and API v2 for shared endpoints and new options.
+- Support v2 synchronous captures, app management, and device discovery.
+- Return the existing empty result through the callback when a thumbnail file download fails.
+
 ## 1.32.0
 
 - Add screenshotPdf and screenshotPdfFile for screenshot/pdf.
